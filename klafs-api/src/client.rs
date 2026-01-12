@@ -8,8 +8,8 @@ use tracing::{debug, info, instrument, warn};
 use crate::debug::{DebugConfig, HttpDebugger, Timer};
 use crate::error::{KlafsError, Result};
 use crate::models::{
-    FavoriteSelectedRequest, PowerControlRequest, SaunaInfo, SaunaMode,
-    SaunaStatus, SetHumidityRequest, SetModeRequest, SetSelectedTimeRequest, SetTemperatureRequest,
+    FavoriteSelectedRequest, PowerControlRequest, SaunaInfo, SaunaMode, SaunaStatus,
+    SetHumidityRequest, SetModeRequest, SetSelectedTimeRequest, SetTemperatureRequest,
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -20,7 +20,10 @@ macro_rules! validate_range {
     ($value:expr, $min:expr, $max:expr, $name:expr) => {
         if !($min..=$max).contains(&$value) {
             return Err(KlafsError::InvalidParameter {
-                message: format!("{} must be between {} and {}, got {}", $name, $min, $max, $value),
+                message: format!(
+                    "{} must be between {} and {}, got {}",
+                    $name, $min, $max, $value
+                ),
             });
         }
     };
@@ -184,7 +187,12 @@ impl KlafsClient {
 
         let request_id = self
             .debugger
-            .log_request("GET", &login_page_url, &reqwest::header::HeaderMap::new(), None)
+            .log_request(
+                "GET",
+                &login_page_url,
+                &reqwest::header::HeaderMap::new(),
+                None,
+            )
             .await;
 
         let login_page_response = self.client.get(&login_page_url).send().await?;
@@ -194,7 +202,13 @@ impl KlafsClient {
         let login_page_html = login_page_response.text().await?;
 
         self.debugger
-            .log_response(&request_id, status_code.as_u16(), &headers, Some(&login_page_html), timer.elapsed_ms())
+            .log_response(
+                &request_id,
+                status_code.as_u16(),
+                &headers,
+                Some(&login_page_html),
+                timer.elapsed_ms(),
+            )
             .await;
 
         if !status_code.is_success() {
@@ -234,17 +248,33 @@ impl KlafsClient {
         let timer = Timer::start();
         let request_id = self
             .debugger
-            .log_request("POST", &login_url, &reqwest::header::HeaderMap::new(), Some(&form_body))
+            .log_request(
+                "POST",
+                &login_url,
+                &reqwest::header::HeaderMap::new(),
+                Some(&form_body),
+            )
             .await;
 
-        let response = self.client.post(&login_url).form(&form_params).send().await?;
+        let response = self
+            .client
+            .post(&login_url)
+            .form(&form_params)
+            .send()
+            .await?;
 
         let status = response.status();
         let headers = response.headers().clone();
         let response_text = response.text().await?;
 
         self.debugger
-            .log_response(&request_id, status.as_u16(), &headers, Some(&response_text), timer.elapsed_ms())
+            .log_response(
+                &request_id,
+                status.as_u16(),
+                &headers,
+                Some(&response_text),
+                timer.elapsed_ms(),
+            )
             .await;
 
         // Check for error indicators in response
@@ -310,16 +340,20 @@ impl KlafsClient {
         let status = response.status();
         let headers = response.headers().clone();
 
-        if status == reqwest::StatusCode::UNAUTHORIZED
-            || status == reqwest::StatusCode::FORBIDDEN
-        {
+        if status == reqwest::StatusCode::UNAUTHORIZED || status == reqwest::StatusCode::FORBIDDEN {
             return Err(KlafsError::SessionExpired);
         }
 
         let response_text = response.text().await?;
 
         self.debugger
-            .log_response(&request_id, status.as_u16(), &headers, Some(&response_text), timer.elapsed_ms())
+            .log_response(
+                &request_id,
+                status.as_u16(),
+                &headers,
+                Some(&response_text),
+                timer.elapsed_ms(),
+            )
             .await;
 
         if !status.is_success() {
@@ -357,16 +391,20 @@ impl KlafsClient {
         let status = response.status();
         let headers = response.headers().clone();
 
-        if status == reqwest::StatusCode::UNAUTHORIZED
-            || status == reqwest::StatusCode::FORBIDDEN
-        {
+        if status == reqwest::StatusCode::UNAUTHORIZED || status == reqwest::StatusCode::FORBIDDEN {
             return Err(KlafsError::SessionExpired);
         }
 
         let html = response.text().await?;
 
         self.debugger
-            .log_response(&request_id, status.as_u16(), &headers, Some(&html), timer.elapsed_ms())
+            .log_response(
+                &request_id,
+                status.as_u16(),
+                &headers,
+                Some(&html),
+                timer.elapsed_ms(),
+            )
             .await;
 
         if !status.is_success() {
@@ -413,7 +451,8 @@ impl KlafsClient {
                     sauna_id, hour, minute
                 );
                 // First set the scheduled time via SetSelectedTime endpoint
-                self.set_selected_time(sauna_id, Some((hour, minute))).await?;
+                self.set_selected_time(sauna_id, Some((hour, minute)))
+                    .await?;
                 (true, hour, minute)
             }
             None => {
@@ -437,7 +476,12 @@ impl KlafsClient {
         let body = serde_json::to_string(&request)?;
         let request_id = self
             .debugger
-            .log_request("POST", &url, &reqwest::header::HeaderMap::new(), Some(&body))
+            .log_request(
+                "POST",
+                &url,
+                &reqwest::header::HeaderMap::new(),
+                Some(&body),
+            )
             .await;
 
         let response = self.client.post(&url).json(&request).send().await?;
@@ -447,12 +491,16 @@ impl KlafsClient {
         let response_text = response.text().await?;
 
         self.debugger
-            .log_response(&request_id, status.as_u16(), &headers, Some(&response_text), timer.elapsed_ms())
+            .log_response(
+                &request_id,
+                status.as_u16(),
+                &headers,
+                Some(&response_text),
+                timer.elapsed_ms(),
+            )
             .await;
 
-        if status == reqwest::StatusCode::UNAUTHORIZED
-            || status == reqwest::StatusCode::FORBIDDEN
-        {
+        if status == reqwest::StatusCode::UNAUTHORIZED || status == reqwest::StatusCode::FORBIDDEN {
             return Err(KlafsError::SessionExpired);
         }
 
@@ -483,7 +531,9 @@ impl KlafsClient {
         }
 
         match schedule {
-            Some((hour, minute)) => info!("Sauna {} scheduled for {:02}:{:02}", sauna_id, hour, minute),
+            Some((hour, minute)) => {
+                info!("Sauna {} scheduled for {:02}:{:02}", sauna_id, hour, minute)
+            }
             None => info!("Sauna {} powered on", sauna_id),
         }
         Ok(())
@@ -512,7 +562,12 @@ impl KlafsClient {
         let body = serde_json::to_string(&request)?;
         let request_id = self
             .debugger
-            .log_request("POST", &url, &reqwest::header::HeaderMap::new(), Some(&body))
+            .log_request(
+                "POST",
+                &url,
+                &reqwest::header::HeaderMap::new(),
+                Some(&body),
+            )
             .await;
 
         let response = self.client.post(&url).json(&request).send().await?;
@@ -522,12 +577,16 @@ impl KlafsClient {
         let response_text = response.text().await?;
 
         self.debugger
-            .log_response(&request_id, status.as_u16(), &headers, Some(&response_text), timer.elapsed_ms())
+            .log_response(
+                &request_id,
+                status.as_u16(),
+                &headers,
+                Some(&response_text),
+                timer.elapsed_ms(),
+            )
             .await;
 
-        if status == reqwest::StatusCode::UNAUTHORIZED
-            || status == reqwest::StatusCode::FORBIDDEN
-        {
+        if status == reqwest::StatusCode::UNAUTHORIZED || status == reqwest::StatusCode::FORBIDDEN {
             return Err(KlafsError::SessionExpired);
         }
 
@@ -564,7 +623,12 @@ impl KlafsClient {
         let body = serde_json::to_string(&request)?;
         let request_id = self
             .debugger
-            .log_request("POST", &url, &reqwest::header::HeaderMap::new(), Some(&body))
+            .log_request(
+                "POST",
+                &url,
+                &reqwest::header::HeaderMap::new(),
+                Some(&body),
+            )
             .await;
 
         let response = self.client.post(&url).json(&request).send().await?;
@@ -574,7 +638,13 @@ impl KlafsClient {
         let response_text = response.text().await?;
 
         self.debugger
-            .log_response(&request_id, status.as_u16(), &headers, Some(&response_text), timer.elapsed_ms())
+            .log_response(
+                &request_id,
+                status.as_u16(),
+                &headers,
+                Some(&response_text),
+                timer.elapsed_ms(),
+            )
             .await;
 
         self.check_response_status(status, &response_text)?;
@@ -612,7 +682,12 @@ impl KlafsClient {
         let body = serde_json::to_string(&request)?;
         let request_id = self
             .debugger
-            .log_request("POST", &url, &reqwest::header::HeaderMap::new(), Some(&body))
+            .log_request(
+                "POST",
+                &url,
+                &reqwest::header::HeaderMap::new(),
+                Some(&body),
+            )
             .await;
 
         let response = self.client.post(&url).json(&request).send().await?;
@@ -622,7 +697,13 @@ impl KlafsClient {
         let response_text = response.text().await?;
 
         self.debugger
-            .log_response(&request_id, status.as_u16(), &headers, Some(&response_text), timer.elapsed_ms())
+            .log_response(
+                &request_id,
+                status.as_u16(),
+                &headers,
+                Some(&response_text),
+                timer.elapsed_ms(),
+            )
             .await;
 
         self.check_response_status(status, &response_text)?;
@@ -646,14 +727,13 @@ impl KlafsClient {
         let status = self.get_status(sauna_id).await?;
         if !status.sanarium_selected {
             return Err(KlafsError::InvalidParameter {
-                message: "Humidity can only be set in Sanarium mode. Use 'set-mode sanarium' first.".to_string(),
+                message:
+                    "Humidity can only be set in Sanarium mode. Use 'set-mode sanarium' first."
+                        .to_string(),
             });
         }
 
-        info!(
-            "Setting humidity level to {} for sauna {}",
-            level, sauna_id
-        );
+        info!("Setting humidity level to {} for sauna {}", level, sauna_id);
         let timer = Timer::start();
 
         let url = format!("{}/SaunaApp/ChangeHumLevel", self.base_url);
@@ -666,7 +746,12 @@ impl KlafsClient {
         let body = serde_json::to_string(&request)?;
         let request_id = self
             .debugger
-            .log_request("POST", &url, &reqwest::header::HeaderMap::new(), Some(&body))
+            .log_request(
+                "POST",
+                &url,
+                &reqwest::header::HeaderMap::new(),
+                Some(&body),
+            )
             .await;
 
         let response = self.client.post(&url).json(&request).send().await?;
@@ -676,7 +761,13 @@ impl KlafsClient {
         let response_text = response.text().await?;
 
         self.debugger
-            .log_response(&request_id, status.as_u16(), &headers, Some(&response_text), timer.elapsed_ms())
+            .log_response(
+                &request_id,
+                status.as_u16(),
+                &headers,
+                Some(&response_text),
+                timer.elapsed_ms(),
+            )
             .await;
 
         self.check_response_status(status, &response_text)?;
@@ -707,11 +798,7 @@ impl KlafsClient {
     /// * `sauna_id` - UUID of the sauna
     /// * `time` - `Some((hour, minute))` to set schedule, `None` to clear
     #[instrument(skip(self), fields(sauna_id = %sauna_id))]
-    pub async fn set_selected_time(
-        &self,
-        sauna_id: &str,
-        time: Option<(i32, i32)>,
-    ) -> Result<()> {
+    pub async fn set_selected_time(&self, sauna_id: &str, time: Option<(i32, i32)>) -> Result<()> {
         Self::validate_sauna_id(sauna_id)?;
 
         let (time_set, hours, minutes) = match time {
@@ -743,7 +830,12 @@ impl KlafsClient {
         let body = serde_json::to_string(&request)?;
         let request_id = self
             .debugger
-            .log_request("POST", &url, &reqwest::header::HeaderMap::new(), Some(&body))
+            .log_request(
+                "POST",
+                &url,
+                &reqwest::header::HeaderMap::new(),
+                Some(&body),
+            )
             .await;
 
         let response = self.client.post(&url).json(&request).send().await?;
@@ -753,7 +845,13 @@ impl KlafsClient {
         let response_text = response.text().await?;
 
         self.debugger
-            .log_response(&request_id, status.as_u16(), &headers, Some(&response_text), timer.elapsed_ms())
+            .log_response(
+                &request_id,
+                status.as_u16(),
+                &headers,
+                Some(&response_text),
+                timer.elapsed_ms(),
+            )
             .await;
 
         self.check_response_status(status, &response_text)?;
@@ -827,7 +925,12 @@ impl KlafsClient {
         let body = serde_json::to_string(&request)?;
         let request_id = self
             .debugger
-            .log_request("POST", &url, &reqwest::header::HeaderMap::new(), Some(&body))
+            .log_request(
+                "POST",
+                &url,
+                &reqwest::header::HeaderMap::new(),
+                Some(&body),
+            )
             .await;
 
         let response = self.client.post(&url).json(&request).send().await?;
@@ -837,7 +940,13 @@ impl KlafsClient {
         let response_text = response.text().await?;
 
         self.debugger
-            .log_response(&request_id, status.as_u16(), &headers, Some(&response_text), timer.elapsed_ms())
+            .log_response(
+                &request_id,
+                status.as_u16(),
+                &headers,
+                Some(&response_text),
+                timer.elapsed_ms(),
+            )
             .await;
 
         self.check_response_status(status, &response_text)?;
@@ -949,9 +1058,7 @@ impl KlafsClient {
         status: reqwest::StatusCode,
         response_text: &str,
     ) -> Result<()> {
-        if status == reqwest::StatusCode::UNAUTHORIZED
-            || status == reqwest::StatusCode::FORBIDDEN
-        {
+        if status == reqwest::StatusCode::UNAUTHORIZED || status == reqwest::StatusCode::FORBIDDEN {
             return Err(KlafsError::SessionExpired);
         }
 
@@ -1124,9 +1231,7 @@ impl KlafsClient {
         )
         .ok()?;
 
-        guid_pattern
-            .find(text)
-            .map(|m| m.as_str().to_lowercase())
+        guid_pattern.find(text).map(|m| m.as_str().to_lowercase())
     }
 
     fn extract_verification_token(&self, html: &str) -> Result<String> {
@@ -1267,8 +1372,12 @@ mod tests {
 
         assert!(!KlafsClient::is_guid("not-a-guid"));
         assert!(!KlafsClient::is_guid("364cc9db-86f1-49d1-86cd"));
-        assert!(!KlafsClient::is_guid("364cc9db-86f1-49d1-86cd-f6ef9b20a490-extra"));
-        assert!(!KlafsClient::is_guid("364cc9db_86f1_49d1_86cd_f6ef9b20a490"));
+        assert!(!KlafsClient::is_guid(
+            "364cc9db-86f1-49d1-86cd-f6ef9b20a490-extra"
+        ));
+        assert!(!KlafsClient::is_guid(
+            "364cc9db_86f1_49d1_86cd_f6ef9b20a490"
+        ));
     }
 
     #[test]
@@ -1323,7 +1432,9 @@ mod tests {
         assert!(KlafsClient::validate_sauna_id("").is_err());
         assert!(KlafsClient::validate_sauna_id("not-a-uuid").is_err());
         assert!(KlafsClient::validate_sauna_id("364cc9db-86f1-49d1").is_err());
-        assert!(KlafsClient::validate_sauna_id("364cc9db-86f1-49d1-86cd-f6ef9b20a490-extra").is_err());
+        assert!(
+            KlafsClient::validate_sauna_id("364cc9db-86f1-49d1-86cd-f6ef9b20a490-extra").is_err()
+        );
     }
 
     #[test]

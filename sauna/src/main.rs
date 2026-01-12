@@ -1,7 +1,9 @@
 use anyhow::{bail, Context, Result};
 use clap::{Parser, Subcommand};
 use colored::Colorize;
-use klafs_api::{ClientConfig, DebugConfig, KlafsClient, SaunaInfo, SaunaMode, SaunaStatus, StatusCode};
+use klafs_api::{
+    ClientConfig, DebugConfig, KlafsClient, SaunaInfo, SaunaMode, SaunaStatus, StatusCode,
+};
 use std::path::{Path, PathBuf};
 
 mod config;
@@ -18,7 +20,10 @@ use profiles::{Profile, Profiles};
 fn parse_time(time_str: &str) -> Result<(i32, i32)> {
     let parts: Vec<&str> = time_str.split(':').collect();
     if parts.len() != 2 {
-        bail!("Invalid time format '{}'. Use HH:MM (e.g., 18:30)", time_str);
+        bail!(
+            "Invalid time format '{}'. Use HH:MM (e.g., 18:30)",
+            time_str
+        );
     }
     let hour: i32 = parts[0]
         .parse()
@@ -41,7 +46,11 @@ fn parse_mode(mode: &str) -> Result<SaunaMode> {
 
 #[derive(Parser)]
 #[command(name = "sauna")]
-#[command(author, version, about = "Control your Klafs sauna from the command line")]
+#[command(
+    author,
+    version,
+    about = "Control your Klafs sauna from the command line"
+)]
 #[command(propagate_version = true)]
 struct Cli {
     /// Enable verbose output
@@ -289,9 +298,11 @@ async fn main() -> Result<()> {
         Commands::Status { sauna_id, json } => {
             cmd_status(sauna_id, json, cli.debug, &cli.debug_file).await
         }
-        Commands::PowerOn { sauna_id, pin, schedule } => {
-            cmd_power_on(sauna_id, pin, schedule, cli.debug, &cli.debug_file).await
-        }
+        Commands::PowerOn {
+            sauna_id,
+            pin,
+            schedule,
+        } => cmd_power_on(sauna_id, pin, schedule, cli.debug, &cli.debug_file).await,
         Commands::PowerOff { sauna_id } => {
             cmd_power_off(sauna_id, cli.debug, &cli.debug_file).await
         }
@@ -305,9 +316,11 @@ async fn main() -> Result<()> {
         Commands::SetHumidity { level, sauna_id } => {
             cmd_set_humidity(level, sauna_id, cli.debug, &cli.debug_file).await
         }
-        Commands::Schedule { time, sauna_id, clear } => {
-            cmd_schedule(time, sauna_id, clear, cli.debug, &cli.debug_file).await
-        }
+        Commands::Schedule {
+            time,
+            sauna_id,
+            clear,
+        } => cmd_schedule(time, sauna_id, clear, cli.debug, &cli.debug_file).await,
         Commands::Profile { command } => cmd_profile(command, cli.debug, &cli.debug_file).await,
         Commands::Configure {
             sauna_id,
@@ -485,19 +498,11 @@ async fn cmd_config(
         println!("{}", "Current configuration:".bold());
         println!(
             "  Username:    {}",
-            config
-                .username
-                .as_deref()
-                .unwrap_or("(not set)")
-                .cyan()
+            config.username.as_deref().unwrap_or("(not set)").cyan()
         );
         println!(
             "  Sauna ID:    {}",
-            config
-                .sauna_id
-                .as_deref()
-                .unwrap_or("(not set)")
-                .cyan()
+            config.sauna_id.as_deref().unwrap_or("(not set)").cyan()
         );
         println!(
             "  Auto-select: {}",
@@ -612,7 +617,8 @@ fn print_status(status: &SaunaStatus) {
                 "Heating ({}°C -> {}°C)",
                 status.current_temperature,
                 status.target_temperature()
-            ).yellow(),
+            )
+            .yellow(),
             StatusCode::Ready => "Ready".green().bold(),
             StatusCode::Standby => "Standby".blue(),
             _ => "On".green(),
@@ -661,10 +667,7 @@ fn print_status(status: &SaunaStatus) {
     // Timer
     if status.show_remaining_bathing_time || status.is_powered_on {
         println!();
-        println!(
-            "  Remaining Time: {}",
-            status.remaining_time().yellow()
-        );
+        println!("  Remaining Time: {}", status.remaining_time().yellow());
     }
 
     // Scheduled start
@@ -699,9 +702,19 @@ async fn cmd_power_on(
     let schedule_time = schedule.map(|s| parse_time(&s)).transpose()?;
 
     if let Some((hour, minute)) = schedule_time {
-        println!("{}", format!("Scheduling sauna to start at {:02}:{:02}...", hour, minute).dimmed());
-        client.power_on(&sauna_id, &pin, Some((hour, minute))).await?;
-        println!("{} Sauna scheduled to start at {:02}:{:02}", "Success!".green().bold(), hour, minute);
+        println!(
+            "{}",
+            format!("Scheduling sauna to start at {:02}:{:02}...", hour, minute).dimmed()
+        );
+        client
+            .power_on(&sauna_id, &pin, Some((hour, minute)))
+            .await?;
+        println!(
+            "{} Sauna scheduled to start at {:02}:{:02}",
+            "Success!".green().bold(),
+            hour,
+            minute
+        );
     } else {
         println!("{}", "Powering on sauna...".dimmed());
         client.power_on(&sauna_id, &pin, None).await?;
@@ -711,11 +724,7 @@ async fn cmd_power_on(
     Ok(())
 }
 
-async fn cmd_power_off(
-    sauna_id: Option<String>,
-    debug: bool,
-    debug_file: &Path,
-) -> Result<()> {
+async fn cmd_power_off(sauna_id: Option<String>, debug: bool, debug_file: &Path) -> Result<()> {
     let config = Config::load()?;
     let client = create_authenticated_client(&config, debug, debug_file).await?;
 
@@ -741,7 +750,10 @@ async fn cmd_set_temp(
 
     let sauna_id = resolve_sauna_id(sauna_id, &config, &client).await?;
 
-    println!("{}", format!("Setting temperature to {}°C...", temperature).dimmed());
+    println!(
+        "{}",
+        format!("Setting temperature to {}°C...", temperature).dimmed()
+    );
 
     client.set_temperature(&sauna_id, temperature).await?;
 
@@ -783,7 +795,10 @@ async fn cmd_set_humidity(
 
     let sauna_id = resolve_sauna_id(sauna_id, &config, &client).await?;
 
-    println!("{}", format!("Setting humidity level to {}...", level).dimmed());
+    println!(
+        "{}",
+        format!("Setting humidity level to {}...", level).dimmed()
+    );
 
     client.set_humidity(&sauna_id, level).await?;
 
@@ -815,9 +830,19 @@ async fn cmd_schedule(
     let schedule_time = time.map(|s| parse_time(&s)).transpose()?;
 
     if let Some((hour, minute)) = schedule_time {
-        println!("{}", format!("Setting schedule to {:02}:{:02}...", hour, minute).dimmed());
-        client.set_selected_time(&sauna_id, Some((hour, minute))).await?;
-        println!("{} Schedule set to {:02}:{:02}", "Success!".green().bold(), hour, minute);
+        println!(
+            "{}",
+            format!("Setting schedule to {:02}:{:02}...", hour, minute).dimmed()
+        );
+        client
+            .set_selected_time(&sauna_id, Some((hour, minute)))
+            .await?;
+        println!(
+            "{} Schedule set to {:02}:{:02}",
+            "Success!".green().bold(),
+            hour,
+            minute
+        );
     } else {
         println!("{}", "Clearing schedule...".dimmed());
         client.set_selected_time(&sauna_id, None).await?;
@@ -857,12 +882,23 @@ async fn cmd_configure(
         changes.push(format!("start time {:02}:{:02}", h, m));
     }
 
-    println!("{}", format!("Configuring: {}...", changes.join(", ")).dimmed());
+    println!(
+        "{}",
+        format!("Configuring: {}...", changes.join(", ")).dimmed()
+    );
 
-    let (hour, minute) = schedule.map(|(h, m)| (Some(h), Some(m))).unwrap_or((None, None));
-    client.configure(&sauna_id, temp, None, humidity, hour, minute).await?;
+    let (hour, minute) = schedule
+        .map(|(h, m)| (Some(h), Some(m)))
+        .unwrap_or((None, None));
+    client
+        .configure(&sauna_id, temp, None, humidity, hour, minute)
+        .await?;
 
-    println!("{} Configuration applied: {}", "Success!".green().bold(), changes.join(", "));
+    println!(
+        "{} Configuration applied: {}",
+        "Success!".green().bold(),
+        changes.join(", ")
+    );
 
     Ok(())
 }
@@ -879,7 +915,10 @@ async fn cmd_profile(command: ProfileCommands, debug: bool, debug_file: &Path) -
             let mut profiles = Profiles::load()?;
 
             if profiles.exists(&name) {
-                bail!("Profile '{}' already exists. Delete it first or use a different name.", name);
+                bail!(
+                    "Profile '{}' already exists. Delete it first or use a different name.",
+                    name
+                );
             }
 
             let profile = Profile::new(&mode, temp, humidity, ir_level)?;
@@ -902,7 +941,8 @@ async fn cmd_profile(command: ProfileCommands, debug: bool, debug_file: &Path) -
                 println!("{}", "No profiles saved.".dimmed());
                 println!(
                     "{}",
-                    "Use 'sauna profile create <name> --mode <mode> --temp <temp>' to create one.".dimmed()
+                    "Use 'sauna profile create <name> --mode <mode> --temp <temp>' to create one."
+                        .dimmed()
                 );
                 return Ok(());
             }
@@ -926,7 +966,10 @@ async fn cmd_profile(command: ProfileCommands, debug: bool, debug_file: &Path) -
                 Some(profile) => {
                     println!("{} {}", "Profile:".bold(), name.cyan().bold());
                     println!("  Mode:        {}", profile.mode.cyan());
-                    println!("  Temperature: {}°C", profile.temperature.to_string().cyan());
+                    println!(
+                        "  Temperature: {}°C",
+                        profile.temperature.to_string().cyan()
+                    );
                     if let Some(hum) = profile.humidity {
                         println!("  Humidity:    {}", hum.to_string().cyan());
                     }
@@ -981,8 +1024,9 @@ async fn cmd_profile(command: ProfileCommands, debug: bool, debug_file: &Path) -
             if start {
                 let pin = match pin {
                     Some(p) => p,
-                    None => Config::get_pin(&sauna_id)?
-                        .context("No PIN provided. Use --pin or store it with 'sauna config --pin <PIN>'")?,
+                    None => Config::get_pin(&sauna_id)?.context(
+                        "No PIN provided. Use --pin or store it with 'sauna config --pin <PIN>'",
+                    )?,
                 };
 
                 println!("{}", "Starting sauna...".dimmed());
@@ -1032,7 +1076,11 @@ async fn create_authenticated_client(
     if debug {
         eprintln!(
             "{}",
-            format!("Debug logging enabled. Writing to: {}", debug_file.display()).dimmed()
+            format!(
+                "Debug logging enabled. Writing to: {}",
+                debug_file.display()
+            )
+            .dimmed()
         );
     }
 
@@ -1078,5 +1126,7 @@ async fn resolve_sauna_id(
     }
 
     // No sauna ID available
-    bail!("No sauna ID provided. Use --sauna-id or set a default with 'sauna config --sauna-id <ID>'");
+    bail!(
+        "No sauna ID provided. Use --sauna-id or set a default with 'sauna config --sauna-id <ID>'"
+    );
 }

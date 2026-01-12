@@ -356,7 +356,11 @@ impl HttpDebugger {
     /// Export all traffic to a string
     pub async fn export(&self) -> String {
         let buffer = self.log_buffer.read().await;
-        buffer.iter().map(|e| e.format()).collect::<Vec<_>>().join("\n")
+        buffer
+            .iter()
+            .map(|e| e.format())
+            .collect::<Vec<_>>()
+            .join("\n")
     }
 
     /// Redact sensitive header values

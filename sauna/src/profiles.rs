@@ -26,7 +26,12 @@ pub struct Profile {
 
 impl Profile {
     /// Create a new profile
-    pub fn new(mode: &str, temperature: i32, humidity: Option<i32>, ir_level: Option<i32>) -> Result<Self> {
+    pub fn new(
+        mode: &str,
+        temperature: i32,
+        humidity: Option<i32>,
+        ir_level: Option<i32>,
+    ) -> Result<Self> {
         // Validate mode
         let mode_lower = mode.to_lowercase();
         if !["sauna", "sanarium", "infrared"].contains(&mode_lower.as_str()) {
@@ -37,17 +42,26 @@ impl Profile {
         match mode_lower.as_str() {
             "sauna" => {
                 if !(10..=100).contains(&temperature) {
-                    bail!("Sauna temperature must be between 10 and 100°C, got {}", temperature);
+                    bail!(
+                        "Sauna temperature must be between 10 and 100°C, got {}",
+                        temperature
+                    );
                 }
             }
             "sanarium" => {
                 if !(40..=75).contains(&temperature) {
-                    bail!("Sanarium temperature must be between 40 and 75°C, got {}", temperature);
+                    bail!(
+                        "Sanarium temperature must be between 40 and 75°C, got {}",
+                        temperature
+                    );
                 }
             }
             "infrared" => {
                 if !(10..=100).contains(&temperature) {
-                    bail!("Infrared temperature must be between 10 and 100°C, got {}", temperature);
+                    bail!(
+                        "Infrared temperature must be between 10 and 100°C, got {}",
+                        temperature
+                    );
                 }
             }
             _ => {}
@@ -83,10 +97,7 @@ impl Profile {
 
     /// Get a human-readable description
     pub fn description(&self) -> String {
-        let mut parts = vec![
-            format!("{}°C", self.temperature),
-            self.mode.clone(),
-        ];
+        let mut parts = vec![format!("{}°C", self.temperature), self.mode.clone()];
 
         if let Some(hum) = self.humidity {
             parts.push(format!("humidity {}", hum));

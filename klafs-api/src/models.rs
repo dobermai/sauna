@@ -259,7 +259,10 @@ impl SaunaStatus {
 
     /// Get remaining bathing time as a formatted string
     pub fn remaining_time(&self) -> String {
-        format!("{}h {:02}m", self.remaining_bathing_hours, self.remaining_bathing_minutes)
+        format!(
+            "{}h {:02}m",
+            self.remaining_bathing_hours, self.remaining_bathing_minutes
+        )
     }
 }
 

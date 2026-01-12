@@ -104,7 +104,10 @@ mod status_tests {
             .await;
 
         let client = create_test_client(mock_server);
-        client.login("test@example.com", "password123").await.unwrap();
+        client
+            .login("test@example.com", "password123")
+            .await
+            .unwrap();
         client
     }
 
@@ -210,7 +213,10 @@ mod list_saunas_tests {
             .await;
 
         let client = create_test_client(&mock_server);
-        client.login("test@example.com", "password123").await.unwrap();
+        client
+            .login("test@example.com", "password123")
+            .await
+            .unwrap();
 
         let saunas = client.list_saunas().await.unwrap();
 
@@ -243,7 +249,10 @@ mod power_control_tests {
             .await;
 
         let client = create_test_client(mock_server);
-        client.login("test@example.com", "password123").await.unwrap();
+        client
+            .login("test@example.com", "password123")
+            .await
+            .unwrap();
         client
     }
 
@@ -254,9 +263,7 @@ mod power_control_tests {
 
         Mock::given(method("POST"))
             .and(path("/SaunaApp/StartCabin"))
-            .respond_with(
-                ResponseTemplate::new(200).set_body_string(fixture("power_success.json")),
-            )
+            .respond_with(ResponseTemplate::new(200).set_body_string(fixture("power_success.json")))
             .mount(&mock_server)
             .await;
 
@@ -274,9 +281,7 @@ mod power_control_tests {
 
         Mock::given(method("POST"))
             .and(path("/SaunaApp/StopCabin"))
-            .respond_with(
-                ResponseTemplate::new(200).set_body_string(fixture("power_success.json")),
-            )
+            .respond_with(ResponseTemplate::new(200).set_body_string(fixture("power_success.json")))
             .mount(&mock_server)
             .await;
 
@@ -326,14 +331,16 @@ mod power_control_tests {
             .and(body_string_contains("\"time_selected\":true"))
             .and(body_string_contains("\"sel_hour\":18"))
             .and(body_string_contains("\"sel_min\":30"))
-            .respond_with(
-                ResponseTemplate::new(200).set_body_string(fixture("power_success.json")),
-            )
+            .respond_with(ResponseTemplate::new(200).set_body_string(fixture("power_success.json")))
             .mount(&mock_server)
             .await;
 
         let result = client
-            .power_on("364cc9db-86f1-49d1-86cd-f6ef9b20a490", "1234", Some((18, 30)))
+            .power_on(
+                "364cc9db-86f1-49d1-86cd-f6ef9b20a490",
+                "1234",
+                Some((18, 30)),
+            )
             .await;
 
         assert!(result.is_ok());
@@ -345,13 +352,21 @@ mod power_control_tests {
 
         // Invalid hour (too high)
         let result = client
-            .power_on("364cc9db-86f1-49d1-86cd-f6ef9b20a490", "1234", Some((25, 30)))
+            .power_on(
+                "364cc9db-86f1-49d1-86cd-f6ef9b20a490",
+                "1234",
+                Some((25, 30)),
+            )
             .await;
         assert!(matches!(result, Err(KlafsError::InvalidParameter { .. })));
 
         // Invalid minute (too high)
         let result = client
-            .power_on("364cc9db-86f1-49d1-86cd-f6ef9b20a490", "1234", Some((18, 60)))
+            .power_on(
+                "364cc9db-86f1-49d1-86cd-f6ef9b20a490",
+                "1234",
+                Some((18, 60)),
+            )
             .await;
         assert!(matches!(result, Err(KlafsError::InvalidParameter { .. })));
     }
@@ -378,7 +393,10 @@ mod control_tests {
             .await;
 
         let client = create_test_client(mock_server);
-        client.login("test@example.com", "password123").await.unwrap();
+        client
+            .login("test@example.com", "password123")
+            .await
+            .unwrap();
         client
     }
 
@@ -468,7 +486,9 @@ mod control_tests {
         // Mock status check returning Sauna mode (not Sanarium)
         Mock::given(method("GET"))
             .and(path("/SaunaApp/GetData"))
-            .respond_with(ResponseTemplate::new(200).set_body_string(fixture("sauna_status_sauna_mode.json")))
+            .respond_with(
+                ResponseTemplate::new(200).set_body_string(fixture("sauna_status_sauna_mode.json")),
+            )
             .mount(&mock_server)
             .await;
 
@@ -801,11 +821,17 @@ mod debug_tests {
             .await;
 
         let client = create_test_client(&mock_server);
-        client.login("test@example.com", "password123").await.unwrap();
+        client
+            .login("test@example.com", "password123")
+            .await
+            .unwrap();
 
         // Check that traffic was captured
         let traffic = client.debugger().get_traffic().await;
-        assert!(traffic.len() >= 2, "Should have captured at least 2 requests");
+        assert!(
+            traffic.len() >= 2,
+            "Should have captured at least 2 requests"
+        );
 
         // Verify first request (GET login page)
         assert_eq!(traffic[0].method, "GET");
@@ -816,4 +842,3 @@ mod debug_tests {
         assert!(traffic[1].url.contains("/Account/Login"));
     }
 }
-
