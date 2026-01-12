@@ -1,19 +1,10 @@
-[workspace]
 # Let GitHub Actions handle publishing
 publish = false
 # Push commits and tags to remote
 push = true
 # Create git tag
 tag = true
-# Commit the version bump
-commit = true
-commit-message = "Release v{{version}}"
+tag-name = "v{{version}}"
+# Commit message format
+pre-release-commit-message = "Release v{{version}}"
 tag-message = "v{{version}}"
-
-# Only release the API crate, not the CLI
-[[package]]
-name = "klafs-api"
-
-[[package]]
-name = "sauna"
-release = false

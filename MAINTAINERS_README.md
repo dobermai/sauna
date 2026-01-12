@@ -35,10 +35,16 @@ GitHub Actions then:
 
 ### Dry Run
 
-To preview what will happen without making changes:
+Dry-run is the default. To preview what will happen:
 
 ```bash
-cargo release patch --dry-run
+cargo release patch
+```
+
+To actually execute the release:
+
+```bash
+cargo release patch --execute
 ```
 
 ### What Gets Published

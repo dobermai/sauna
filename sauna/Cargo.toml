@@ -32,3 +32,6 @@ keyring.workspace = true
 
 # Password input
 rpassword = "7"
+
+[package.metadata.release]
+release = false
