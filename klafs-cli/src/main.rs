@@ -5,8 +5,10 @@ use klafs_core::{ClientConfig, DebugConfig, KlafsClient, SaunaInfo, SaunaMode, S
 use std::path::{Path, PathBuf};
 
 mod config;
+mod profiles;
 
 use config::Config;
+use profiles::{Profile, Profiles};
 
 #[derive(Parser)]
 #[command(name = "klafs")]
@@ -153,6 +155,89 @@ enum Commands {
         #[arg(long)]
         clear: bool,
     },
+
+    /// Manage saved profiles for quick sauna configuration
+    Profile {
+        #[command(subcommand)]
+        command: ProfileCommands,
+    },
+
+    /// Configure multiple sauna settings in one command
+    Configure {
+        /// Sauna ID (uses default from config if not provided)
+        #[arg(short, long)]
+        sauna_id: Option<String>,
+
+        /// Target temperature in °C (for current mode)
+        #[arg(short, long)]
+        temp: Option<i32>,
+
+        /// Humidity level (1-10, sanarium mode only)
+        #[arg(long)]
+        humidity: Option<i32>,
+
+        /// Scheduled start time in HH:MM format
+        #[arg(long)]
+        time: Option<String>,
+    },
+}
+
+#[derive(Subcommand)]
+enum ProfileCommands {
+    /// Create a new profile
+    Create {
+        /// Name for the profile
+        name: String,
+
+        /// Operating mode: sauna, sanarium, or infrared
+        #[arg(short, long)]
+        mode: String,
+
+        /// Target temperature in °C
+        #[arg(short, long)]
+        temp: i32,
+
+        /// Humidity level (1-10, sanarium mode only)
+        #[arg(long)]
+        humidity: Option<i32>,
+
+        /// Infrared level (1-10, infrared mode only)
+        #[arg(long)]
+        ir_level: Option<i32>,
+    },
+
+    /// List all saved profiles
+    List,
+
+    /// Apply a profile to the sauna
+    Apply {
+        /// Profile name to apply
+        name: String,
+
+        /// Sauna ID (uses default from config if not provided)
+        #[arg(short, long)]
+        sauna_id: Option<String>,
+
+        /// Also start the sauna after applying (requires PIN)
+        #[arg(long)]
+        start: bool,
+
+        /// PIN for power control (only with --start)
+        #[arg(short, long)]
+        pin: Option<String>,
+    },
+
+    /// Delete a profile
+    Delete {
+        /// Profile name to delete
+        name: String,
+    },
+
+    /// Show details of a profile
+    Show {
+        /// Profile name to show
+        name: String,
+    },
 }
 
 #[tokio::main]
@@ -202,6 +287,13 @@ async fn main() -> Result<()> {
         Commands::Schedule { time, sauna_id, clear } => {
             cmd_schedule(time, sauna_id, clear, cli.debug, &cli.debug_file).await
         }
+        Commands::Profile { command } => cmd_profile(command, cli.debug, &cli.debug_file).await,
+        Commands::Configure {
+            sauna_id,
+            temp,
+            humidity,
+            time,
+        } => cmd_configure(sauna_id, temp, humidity, time, cli.debug, &cli.debug_file).await,
     }
 }
 
@@ -818,6 +910,234 @@ async fn cmd_schedule(
         }
         None => {
             println!("{} Schedule cleared.", "Success!".green().bold());
+        }
+    }
+
+    Ok(())
+}
+
+async fn cmd_configure(
+    sauna_id: Option<String>,
+    temp: Option<i32>,
+    humidity: Option<i32>,
+    time: Option<String>,
+    debug: bool,
+    debug_file: &Path,
+) -> Result<()> {
+    let config = Config::load()?;
+    let client = create_authenticated_client(&config, debug, debug_file).await?;
+
+    let sauna_id = sauna_id.or(config.sauna_id).context(
+        "No sauna ID provided. Use --sauna-id or set a default with 'klafs config --sauna-id <ID>'",
+    )?;
+
+    // Parse time if provided
+    let (hour, minute) = match time {
+        Some(time_str) => {
+            let parts: Vec<&str> = time_str.split(':').collect();
+            if parts.len() != 2 {
+                bail!("Invalid time format '{}'. Use HH:MM format (e.g., 18:30)", time_str);
+            }
+            let hour: i32 = parts[0]
+                .parse()
+                .with_context(|| format!("Invalid hour: {}", parts[0]))?;
+            let minute: i32 = parts[1]
+                .parse()
+                .with_context(|| format!("Invalid minute: {}", parts[1]))?;
+            (Some(hour), Some(minute))
+        }
+        None => (None, None),
+    };
+
+    // Check that at least one option is provided
+    if temp.is_none() && humidity.is_none() && hour.is_none() {
+        bail!("No configuration options provided. Use --temp, --humidity, or --time.");
+    }
+
+    // Build description of changes
+    let mut changes = Vec::new();
+    if let Some(t) = temp {
+        changes.push(format!("temperature {}°C", t));
+    }
+    if let Some(h) = humidity {
+        changes.push(format!("humidity level {}", h));
+    }
+    if let (Some(h), Some(m)) = (hour, minute) {
+        changes.push(format!("start time {:02}:{:02}", h, m));
+    }
+
+    println!(
+        "{}",
+        format!("Configuring: {}...", changes.join(", ")).dimmed()
+    );
+
+    // Note: The configure method takes both sauna and sanarium temperature
+    // For simplicity, we set both to the same value if temp is provided
+    // The API will use the appropriate one based on current mode
+    client
+        .configure(&sauna_id, temp, temp, humidity, hour, minute)
+        .await?;
+
+    println!(
+        "{} Configuration applied: {}",
+        "Success!".green().bold(),
+        changes.join(", ")
+    );
+
+    Ok(())
+}
+
+async fn cmd_profile(command: ProfileCommands, debug: bool, debug_file: &Path) -> Result<()> {
+    match command {
+        ProfileCommands::Create {
+            name,
+            mode,
+            temp,
+            humidity,
+            ir_level,
+        } => {
+            let mut profiles = Profiles::load()?;
+
+            if profiles.exists(&name) {
+                bail!("Profile '{}' already exists. Delete it first or use a different name.", name);
+            }
+
+            let profile = Profile::new(&mode, temp, humidity, ir_level)?;
+            profiles.set(&name, profile.clone());
+            profiles.save()?;
+
+            println!(
+                "{} Created profile '{}': {}",
+                "Success!".green().bold(),
+                name.cyan(),
+                profile.description()
+            );
+        }
+
+        ProfileCommands::List => {
+            let profiles = Profiles::load()?;
+            let names = profiles.list();
+
+            if names.is_empty() {
+                println!("{}", "No profiles saved.".dimmed());
+                println!(
+                    "{}",
+                    "Use 'klafs profile create <name> --mode <mode> --temp <temp>' to create one.".dimmed()
+                );
+                return Ok(());
+            }
+
+            println!("{}", "Saved Profiles".bold().underline());
+            println!();
+
+            for name in names {
+                if let Some(profile) = profiles.get(name) {
+                    println!("  {} {}", "*".cyan(), name.cyan().bold());
+                    println!("      {}", profile.description().dimmed());
+                }
+            }
+            println!();
+        }
+
+        ProfileCommands::Show { name } => {
+            let profiles = Profiles::load()?;
+
+            match profiles.get(&name) {
+                Some(profile) => {
+                    println!("{} {}", "Profile:".bold(), name.cyan().bold());
+                    println!("  Mode:        {}", profile.mode.cyan());
+                    println!("  Temperature: {}°C", profile.temperature.to_string().cyan());
+                    if let Some(hum) = profile.humidity {
+                        println!("  Humidity:    {}", hum.to_string().cyan());
+                    }
+                    if let Some(ir) = profile.ir_level {
+                        println!("  IR Level:    {}", ir.to_string().cyan());
+                    }
+                }
+                None => {
+                    bail!("Profile '{}' not found", name);
+                }
+            }
+        }
+
+        ProfileCommands::Apply {
+            name,
+            sauna_id,
+            start,
+            pin,
+        } => {
+            let profiles = Profiles::load()?;
+            let config = Config::load()?;
+
+            let profile = profiles
+                .get(&name)
+                .with_context(|| format!("Profile '{}' not found", name))?;
+
+            let sauna_id = sauna_id.or(config.sauna_id.clone()).context(
+                "No sauna ID provided. Use --sauna-id or set a default with 'klafs config --sauna-id <ID>'",
+            )?;
+
+            let client = create_authenticated_client(&config, debug, debug_file).await?;
+
+            // First set the mode
+            let sauna_mode = match profile.mode.as_str() {
+                "sauna" => SaunaMode::Sauna,
+                "sanarium" => SaunaMode::Sanarium,
+                "infrared" => SaunaMode::Infrared,
+                _ => bail!("Invalid mode in profile: {}", profile.mode),
+            };
+
+            println!(
+                "{}",
+                format!("Applying profile '{}'...", name).dimmed()
+            );
+
+            // Set mode
+            client.set_mode(&sauna_id, sauna_mode).await?;
+
+            // Apply temperature and levels using FavoriteSelected
+            let humidity_level = profile.humidity.unwrap_or(0);
+            let ir_level = profile.ir_level.unwrap_or(0);
+
+            client
+                .apply_favorite(&sauna_id, profile.temperature, humidity_level, ir_level)
+                .await?;
+
+            println!(
+                "{} Profile '{}' applied: {}",
+                "Success!".green().bold(),
+                name.cyan(),
+                profile.description()
+            );
+
+            // Optionally start the sauna
+            if start {
+                let pin = match pin {
+                    Some(p) => p,
+                    None => Config::get_pin(&sauna_id)?
+                        .context("No PIN provided. Use --pin or store it with 'klafs config --pin <PIN>'")?,
+                };
+
+                println!("{}", "Starting sauna...".dimmed());
+                client.power_on(&sauna_id, &pin, None).await?;
+                println!("{} Sauna is powering on!", "Success!".green().bold());
+            }
+        }
+
+        ProfileCommands::Delete { name } => {
+            let mut profiles = Profiles::load()?;
+
+            if profiles.remove(&name).is_none() {
+                bail!("Profile '{}' not found", name);
+            }
+
+            profiles.save()?;
+
+            println!(
+                "{} Profile '{}' deleted.",
+                "Done.".green().bold(),
+                name.cyan()
+            );
         }
     }
 

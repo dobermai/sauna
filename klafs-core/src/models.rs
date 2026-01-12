@@ -259,3 +259,12 @@ pub(crate) struct SetSelectedTimeRequest {
     pub hours: i32,
     pub minutes: i32,
 }
+
+/// Request body for FavoriteSelected endpoint (apply profile settings)
+#[derive(Debug, Serialize)]
+pub(crate) struct FavoriteSelectedRequest {
+    pub id: String,
+    pub temp: i32,
+    pub hum_level: i32,
+    pub ir_level: i32,
+}

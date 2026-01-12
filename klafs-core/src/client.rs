@@ -8,8 +8,8 @@ use tracing::{debug, info, instrument, warn};
 use crate::debug::{DebugConfig, HttpDebugger, Timer};
 use crate::error::{KlafsError, Result};
 use crate::models::{
-    ConfigChangeRequest, PowerControlRequest, SaunaInfo, SaunaMode, SaunaStatus,
-    SetHumidityRequest, SetModeRequest, SetSelectedTimeRequest, SetTemperatureRequest,
+    ConfigChangeRequest, FavoriteSelectedRequest, PowerControlRequest, SaunaInfo, SaunaMode,
+    SaunaStatus, SetHumidityRequest, SetModeRequest, SetSelectedTimeRequest, SetTemperatureRequest,
 };
 
 /// Default base URL for the Klafs API
@@ -778,6 +778,212 @@ impl KlafsClient {
             Some((hour, minute)) => info!("Scheduled time set to {:02}:{:02}", hour, minute),
             None => info!("Scheduled time cleared"),
         }
+        Ok(())
+    }
+
+    /// Apply favorite/profile settings (temperature, humidity level, IR level)
+    ///
+    /// This uses the FavoriteSelected endpoint to apply a set of parameters
+    /// in a single API call.
+    ///
+    /// # Arguments
+    ///
+    /// * `sauna_id` - UUID of the sauna
+    /// * `temperature` - Target temperature in °C
+    /// * `humidity_level` - Humidity level (1-10, for Sanarium mode)
+    /// * `ir_level` - Infrared level (1-10, for IR mode)
+    #[instrument(skip(self), fields(sauna_id = %sauna_id))]
+    pub async fn apply_favorite(
+        &self,
+        sauna_id: &str,
+        temperature: i32,
+        humidity_level: i32,
+        ir_level: i32,
+    ) -> Result<()> {
+        // Validate parameters
+        if !(10..=100).contains(&temperature) {
+            return Err(KlafsError::InvalidParameter {
+                message: format!(
+                    "Temperature must be between 10 and 100°C, got {}",
+                    temperature
+                ),
+            });
+        }
+        if !(0..=10).contains(&humidity_level) {
+            return Err(KlafsError::InvalidParameter {
+                message: format!(
+                    "Humidity level must be between 0 and 10, got {}",
+                    humidity_level
+                ),
+            });
+        }
+        if !(0..=10).contains(&ir_level) {
+            return Err(KlafsError::InvalidParameter {
+                message: format!("IR level must be between 0 and 10, got {}", ir_level),
+            });
+        }
+
+        info!(
+            "Applying favorite settings: temp={}°C, hum={}, ir={} for sauna {}",
+            temperature, humidity_level, ir_level, sauna_id
+        );
+
+        let timer = Timer::start();
+        let url = format!("{}/SaunaApp/FavoriteSelected", self.base_url);
+
+        let request = FavoriteSelectedRequest {
+            id: sauna_id.to_string(),
+            temp: temperature,
+            hum_level: humidity_level,
+            ir_level,
+        };
+
+        let body = serde_json::to_string(&request)?;
+        let request_id = self
+            .debugger
+            .log_request("POST", &url, &reqwest::header::HeaderMap::new(), Some(&body))
+            .await;
+
+        let response = self.client.post(&url).json(&request).send().await?;
+
+        let status = response.status();
+        let headers = response.headers().clone();
+        let response_text = response.text().await?;
+
+        self.debugger
+            .log_response(&request_id, status.as_u16(), &headers, Some(&response_text), timer.elapsed_ms())
+            .await;
+
+        self.check_response_status(status, &response_text)?;
+
+        info!("Favorite settings applied successfully");
+        Ok(())
+    }
+
+    /// Configure multiple settings in a single API call
+    ///
+    /// This uses the PostConfigChange endpoint to set multiple parameters at once.
+    /// Only the parameters that are `Some` will be included in the request.
+    ///
+    /// # Arguments
+    ///
+    /// * `sauna_id` - UUID of the sauna
+    /// * `sauna_temperature` - Target temperature for sauna mode (10-100°C)
+    /// * `sanarium_temperature` - Target temperature for sanarium mode (40-75°C)
+    /// * `humidity_level` - Humidity level for sanarium mode (1-10)
+    /// * `hour` - Scheduled start hour (0-23)
+    /// * `minute` - Scheduled start minute (0-59)
+    #[instrument(skip(self), fields(sauna_id = %sauna_id))]
+    pub async fn configure(
+        &self,
+        sauna_id: &str,
+        sauna_temperature: Option<i32>,
+        sanarium_temperature: Option<i32>,
+        humidity_level: Option<i32>,
+        hour: Option<i32>,
+        minute: Option<i32>,
+    ) -> Result<()> {
+        // Validate parameters if provided
+        if let Some(temp) = sauna_temperature {
+            if !(10..=100).contains(&temp) {
+                return Err(KlafsError::InvalidParameter {
+                    message: format!(
+                        "Sauna temperature must be between 10 and 100°C, got {}",
+                        temp
+                    ),
+                });
+            }
+        }
+        if let Some(temp) = sanarium_temperature {
+            if !(40..=75).contains(&temp) {
+                return Err(KlafsError::InvalidParameter {
+                    message: format!(
+                        "Sanarium temperature must be between 40 and 75°C, got {}",
+                        temp
+                    ),
+                });
+            }
+        }
+        if let Some(level) = humidity_level {
+            if !(1..=10).contains(&level) {
+                return Err(KlafsError::InvalidParameter {
+                    message: format!("Humidity level must be between 1 and 10, got {}", level),
+                });
+            }
+        }
+        if let Some(h) = hour {
+            if !(0..=23).contains(&h) {
+                return Err(KlafsError::InvalidParameter {
+                    message: format!("Hour must be between 0 and 23, got {}", h),
+                });
+            }
+        }
+        if let Some(m) = minute {
+            if !(0..=59).contains(&m) {
+                return Err(KlafsError::InvalidParameter {
+                    message: format!("Minute must be between 0 and 59, got {}", m),
+                });
+            }
+        }
+
+        // Build info message
+        let mut changes = Vec::new();
+        if let Some(t) = sauna_temperature {
+            changes.push(format!("sauna_temp={}°C", t));
+        }
+        if let Some(t) = sanarium_temperature {
+            changes.push(format!("sanarium_temp={}°C", t));
+        }
+        if let Some(l) = humidity_level {
+            changes.push(format!("humidity={}", l));
+        }
+        if hour.is_some() || minute.is_some() {
+            changes.push(format!(
+                "time={:02}:{:02}",
+                hour.unwrap_or(0),
+                minute.unwrap_or(0)
+            ));
+        }
+
+        if changes.is_empty() {
+            return Err(KlafsError::InvalidParameter {
+                message: "No configuration changes specified".to_string(),
+            });
+        }
+
+        info!("Configuring sauna {}: {}", sauna_id, changes.join(", "));
+
+        let timer = Timer::start();
+        let url = format!("{}/SaunaApp/PostConfigChange", self.base_url);
+
+        let request = ConfigChangeRequest {
+            sauna_id: sauna_id.to_string(),
+            selected_sauna_temperature: sauna_temperature,
+            selected_sanarium_temperature: sanarium_temperature,
+            selected_hum_level: humidity_level,
+            selected_hour: hour,
+            selected_minute: minute,
+        };
+
+        let body = serde_json::to_string(&request)?;
+        let request_id = self
+            .debugger
+            .log_request("POST", &url, &reqwest::header::HeaderMap::new(), Some(&body))
+            .await;
+
+        let response = self.client.post(&url).json(&request).send().await?;
+
+        let status = response.status();
+        let headers = response.headers().clone();
+        let response_text = response.text().await?;
+
+        self.debugger
+            .log_response(&request_id, status.as_u16(), &headers, Some(&response_text), timer.elapsed_ms())
+            .await;
+
+        self.check_response_status(status, &response_text)?;
+
+        info!("Configuration applied successfully");
         Ok(())
     }
 
