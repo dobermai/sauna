@@ -261,7 +261,7 @@ mod power_control_tests {
             .await;
 
         let result = client
-            .power_on("364cc9db-86f1-49d1-86cd-f6ef9b20a490", "1234")
+            .power_on("364cc9db-86f1-49d1-86cd-f6ef9b20a490", "1234", None)
             .await;
 
         assert!(result.is_ok());
@@ -301,10 +301,50 @@ mod power_control_tests {
             .await;
 
         let result = client
-            .power_on("364cc9db-86f1-49d1-86cd-f6ef9b20a490", "wrong")
+            .power_on("364cc9db-86f1-49d1-86cd-f6ef9b20a490", "wrong", None)
             .await;
 
         assert!(matches!(result, Err(KlafsError::InvalidPin)));
+    }
+
+    #[tokio::test]
+    async fn test_power_on_scheduled() {
+        let mock_server = MockServer::start().await;
+        let client = setup_logged_in_client(&mock_server).await;
+
+        Mock::given(method("POST"))
+            .and(path("/SaunaApp/StartCabin"))
+            .and(body_string_contains("\"time_selected\":true"))
+            .and(body_string_contains("\"sel_hour\":18"))
+            .and(body_string_contains("\"sel_min\":30"))
+            .respond_with(
+                ResponseTemplate::new(200).set_body_string(fixture("power_success.json")),
+            )
+            .mount(&mock_server)
+            .await;
+
+        let result = client
+            .power_on("364cc9db-86f1-49d1-86cd-f6ef9b20a490", "1234", Some((18, 30)))
+            .await;
+
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_power_on_schedule_validation() {
+        let client = KlafsClient::new();
+
+        // Invalid hour (too high)
+        let result = client
+            .power_on("364cc9db-86f1-49d1-86cd-f6ef9b20a490", "1234", Some((25, 30)))
+            .await;
+        assert!(matches!(result, Err(KlafsError::InvalidParameter { .. })));
+
+        // Invalid minute (too high)
+        let result = client
+            .power_on("364cc9db-86f1-49d1-86cd-f6ef9b20a490", "1234", Some((18, 60)))
+            .await;
+        assert!(matches!(result, Err(KlafsError::InvalidParameter { .. })));
     }
 }
 
@@ -452,6 +492,63 @@ mod control_tests {
         // Invalid minute
         let result = client
             .set_start_time("364cc9db-86f1-49d1-86cd-f6ef9b20a490", 18, 60)
+            .await;
+        assert!(matches!(result, Err(KlafsError::InvalidParameter { .. })));
+    }
+
+    #[tokio::test]
+    async fn test_set_selected_time() {
+        let mock_server = MockServer::start().await;
+        let client = setup_logged_in_client(&mock_server).await;
+
+        Mock::given(method("POST"))
+            .and(path("/SaunaApp/SetSelectedTime"))
+            .and(body_string_contains("\"time_set\":true"))
+            .and(body_string_contains("\"hours\":18"))
+            .and(body_string_contains("\"minutes\":30"))
+            .respond_with(ResponseTemplate::new(200).set_body_string(r#"{"success": true}"#))
+            .mount(&mock_server)
+            .await;
+
+        let result = client
+            .set_selected_time("364cc9db-86f1-49d1-86cd-f6ef9b20a490", Some((18, 30)))
+            .await;
+
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_set_selected_time_clear() {
+        let mock_server = MockServer::start().await;
+        let client = setup_logged_in_client(&mock_server).await;
+
+        Mock::given(method("POST"))
+            .and(path("/SaunaApp/SetSelectedTime"))
+            .and(body_string_contains("\"time_set\":false"))
+            .respond_with(ResponseTemplate::new(200).set_body_string(r#"{"success": true}"#))
+            .mount(&mock_server)
+            .await;
+
+        let result = client
+            .set_selected_time("364cc9db-86f1-49d1-86cd-f6ef9b20a490", None)
+            .await;
+
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_set_selected_time_invalid() {
+        let client = KlafsClient::new();
+
+        // Invalid hour
+        let result = client
+            .set_selected_time("364cc9db-86f1-49d1-86cd-f6ef9b20a490", Some((25, 30)))
+            .await;
+        assert!(matches!(result, Err(KlafsError::InvalidParameter { .. })));
+
+        // Invalid minute
+        let result = client
+            .set_selected_time("364cc9db-86f1-49d1-86cd-f6ef9b20a490", Some((18, 60)))
             .await;
         assert!(matches!(result, Err(KlafsError::InvalidParameter { .. })));
     }

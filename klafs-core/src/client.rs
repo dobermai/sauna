@@ -9,7 +9,7 @@ use crate::debug::{DebugConfig, HttpDebugger, Timer};
 use crate::error::{KlafsError, Result};
 use crate::models::{
     ConfigChangeRequest, PowerControlRequest, SaunaInfo, SaunaMode, SaunaStatus,
-    SetHumidityRequest, SetModeRequest, SetTemperatureRequest,
+    SetHumidityRequest, SetModeRequest, SetSelectedTimeRequest, SetTemperatureRequest,
 };
 
 /// Default base URL for the Klafs API
@@ -358,25 +358,54 @@ impl KlafsClient {
         Ok(saunas)
     }
 
-    /// Power on the sauna
+    /// Power on the sauna immediately or at a scheduled time
     ///
     /// # Arguments
     ///
     /// * `sauna_id` - UUID of the sauna
     /// * `pin` - PIN code for power control
+    /// * `schedule` - Optional (hour, minute) to schedule start instead of immediate
     #[instrument(skip(self, pin), fields(sauna_id = %sauna_id))]
-    pub async fn power_on(&self, sauna_id: &str, pin: &str) -> Result<()> {
-        info!("Powering on sauna {}", sauna_id);
-        let timer = Timer::start();
+    pub async fn power_on(
+        &self,
+        sauna_id: &str,
+        pin: &str,
+        schedule: Option<(i32, i32)>,
+    ) -> Result<()> {
+        let (time_selected, sel_hour, sel_min) = match schedule {
+            Some((hour, minute)) => {
+                // Validate schedule time
+                if !(0..=23).contains(&hour) {
+                    return Err(KlafsError::InvalidParameter {
+                        message: format!("Hour must be between 0 and 23, got {}", hour),
+                    });
+                }
+                if !(0..=59).contains(&minute) {
+                    return Err(KlafsError::InvalidParameter {
+                        message: format!("Minute must be between 0 and 59, got {}", minute),
+                    });
+                }
+                info!(
+                    "Scheduling sauna {} to start at {:02}:{:02}",
+                    sauna_id, hour, minute
+                );
+                (true, Some(hour), Some(minute))
+            }
+            None => {
+                info!("Powering on sauna {} immediately", sauna_id);
+                (false, None, None)
+            }
+        };
 
+        let timer = Timer::start();
         let url = format!("{}/SaunaApp/StartCabin", self.base_url);
 
         let request = PowerControlRequest {
             id: sauna_id.to_string(),
             pin: pin.to_string(),
-            time_selected: false,
-            sel_hour: None,
-            sel_min: None,
+            time_selected,
+            sel_hour,
+            sel_min,
         };
 
         let body = serde_json::to_string(&request)?;
@@ -413,7 +442,10 @@ impl KlafsClient {
             });
         }
 
-        info!("Sauna {} powered on", sauna_id);
+        match schedule {
+            Some((hour, minute)) => info!("Sauna {} scheduled for {:02}:{:02}", sauna_id, hour, minute),
+            None => info!("Sauna {} powered on", sauna_id),
+        }
         Ok(())
     }
 
@@ -671,6 +703,81 @@ impl KlafsClient {
         self.check_response_status(status, &response_text)?;
 
         info!("Start time set to {:02}:{:02}", hour, minute);
+        Ok(())
+    }
+
+    /// Set or clear the scheduled start time without starting the sauna
+    ///
+    /// This uses the SetSelectedTime endpoint to configure scheduling
+    /// without immediately powering on the sauna.
+    ///
+    /// # Arguments
+    ///
+    /// * `sauna_id` - UUID of the sauna
+    /// * `time` - `Some((hour, minute))` to set schedule, `None` to clear
+    #[instrument(skip(self), fields(sauna_id = %sauna_id))]
+    pub async fn set_selected_time(
+        &self,
+        sauna_id: &str,
+        time: Option<(i32, i32)>,
+    ) -> Result<()> {
+        let (time_set, hours, minutes) = match time {
+            Some((hour, minute)) => {
+                // Validate time
+                if !(0..=23).contains(&hour) {
+                    return Err(KlafsError::InvalidParameter {
+                        message: format!("Hour must be between 0 and 23, got {}", hour),
+                    });
+                }
+                if !(0..=59).contains(&minute) {
+                    return Err(KlafsError::InvalidParameter {
+                        message: format!("Minute must be between 0 and 59, got {}", minute),
+                    });
+                }
+                info!(
+                    "Setting scheduled time to {:02}:{:02} for sauna {}",
+                    hour, minute, sauna_id
+                );
+                (true, hour, minute)
+            }
+            None => {
+                info!("Clearing scheduled time for sauna {}", sauna_id);
+                (false, 0, 0)
+            }
+        };
+
+        let timer = Timer::start();
+        let url = format!("{}/SaunaApp/SetSelectedTime", self.base_url);
+
+        let request = SetSelectedTimeRequest {
+            id: sauna_id.to_string(),
+            time_set,
+            hours,
+            minutes,
+        };
+
+        let body = serde_json::to_string(&request)?;
+        let request_id = self
+            .debugger
+            .log_request("POST", &url, &reqwest::header::HeaderMap::new(), Some(&body))
+            .await;
+
+        let response = self.client.post(&url).json(&request).send().await?;
+
+        let status = response.status();
+        let headers = response.headers().clone();
+        let response_text = response.text().await?;
+
+        self.debugger
+            .log_response(&request_id, status.as_u16(), &headers, Some(&response_text), timer.elapsed_ms())
+            .await;
+
+        self.check_response_status(status, &response_text)?;
+
+        match time {
+            Some((hour, minute)) => info!("Scheduled time set to {:02}:{:02}", hour, minute),
+            None => info!("Scheduled time cleared"),
+        }
         Ok(())
     }
 

@@ -87,6 +87,10 @@ enum Commands {
         /// PIN for power control
         #[arg(short, long)]
         pin: Option<String>,
+
+        /// Schedule start time in HH:MM format (e.g., --at 18:30)
+        #[arg(long = "at")]
+        schedule: Option<String>,
     },
 
     /// Power off the sauna (no PIN required)
@@ -126,7 +130,7 @@ enum Commands {
         sauna_id: Option<String>,
     },
 
-    /// Set the scheduled start time
+    /// Set the scheduled start time (deprecated, use 'schedule' instead)
     SetTime {
         /// Start time in HH:MM format (e.g., 18:30)
         time: String,
@@ -134,6 +138,20 @@ enum Commands {
         /// Sauna ID (uses default from config if not provided)
         #[arg(short, long)]
         sauna_id: Option<String>,
+    },
+
+    /// Set or clear the scheduled start time without starting the sauna
+    Schedule {
+        /// Start time in HH:MM format (e.g., 18:30). Omit to clear schedule.
+        time: Option<String>,
+
+        /// Sauna ID (uses default from config if not provided)
+        #[arg(short, long)]
+        sauna_id: Option<String>,
+
+        /// Clear the scheduled time
+        #[arg(long)]
+        clear: bool,
     },
 }
 
@@ -162,8 +180,8 @@ async fn main() -> Result<()> {
         Commands::Status { sauna_id, json } => {
             cmd_status(sauna_id, json, cli.debug, &cli.debug_file).await
         }
-        Commands::PowerOn { sauna_id, pin } => {
-            cmd_power_on(sauna_id, pin, cli.debug, &cli.debug_file).await
+        Commands::PowerOn { sauna_id, pin, schedule } => {
+            cmd_power_on(sauna_id, pin, schedule, cli.debug, &cli.debug_file).await
         }
         Commands::PowerOff { sauna_id } => {
             cmd_power_off(sauna_id, cli.debug, &cli.debug_file).await
@@ -180,6 +198,9 @@ async fn main() -> Result<()> {
         }
         Commands::SetTime { time, sauna_id } => {
             cmd_set_time(time, sauna_id, cli.debug, &cli.debug_file).await
+        }
+        Commands::Schedule { time, sauna_id, clear } => {
+            cmd_schedule(time, sauna_id, clear, cli.debug, &cli.debug_file).await
         }
     }
 }
@@ -527,6 +548,7 @@ fn print_status(status: &SaunaStatus) {
 async fn cmd_power_on(
     sauna_id: Option<String>,
     pin: Option<String>,
+    schedule: Option<String>,
     debug: bool,
     debug_file: &Path,
 ) -> Result<()> {
@@ -543,11 +565,48 @@ async fn cmd_power_on(
             .context("No PIN provided. Use --pin or store it with 'klafs config --pin <PIN>'")?,
     };
 
-    println!("{}", "Powering on sauna...".dimmed());
+    // Parse optional schedule time
+    let schedule_time = match schedule {
+        Some(time_str) => {
+            let parts: Vec<&str> = time_str.split(':').collect();
+            if parts.len() != 2 {
+                bail!("Invalid time format '{}'. Use HH:MM format (e.g., 18:30)", time_str);
+            }
+            let hour: i32 = parts[0]
+                .parse()
+                .with_context(|| format!("Invalid hour: {}", parts[0]))?;
+            let minute: i32 = parts[1]
+                .parse()
+                .with_context(|| format!("Invalid minute: {}", parts[1]))?;
+            Some((hour, minute))
+        }
+        None => None,
+    };
 
-    client.power_on(&sauna_id, &pin).await?;
+    match &schedule_time {
+        Some((hour, minute)) => {
+            println!("{}", format!("Scheduling sauna to start at {:02}:{:02}...", hour, minute).dimmed());
+        }
+        None => {
+            println!("{}", "Powering on sauna...".dimmed());
+        }
+    }
 
-    println!("{} Sauna is powering on!", "Success!".green().bold());
+    client.power_on(&sauna_id, &pin, schedule_time).await?;
+
+    match schedule_time {
+        Some((hour, minute)) => {
+            println!(
+                "{} Sauna scheduled to start at {:02}:{:02}",
+                "Success!".green().bold(),
+                hour,
+                minute
+            );
+        }
+        None => {
+            println!("{} Sauna is powering on!", "Success!".green().bold());
+        }
+    }
 
     Ok(())
 }
@@ -697,6 +756,73 @@ async fn cmd_set_time(
     Ok(())
 }
 
+async fn cmd_schedule(
+    time: Option<String>,
+    sauna_id: Option<String>,
+    clear: bool,
+    debug: bool,
+    debug_file: &Path,
+) -> Result<()> {
+    let config = Config::load()?;
+    let client = create_authenticated_client(&config, debug, debug_file).await?;
+
+    let sauna_id = sauna_id.or(config.sauna_id).context(
+        "No sauna ID provided. Use --sauna-id or set a default with 'klafs config --sauna-id <ID>'",
+    )?;
+
+    // Determine if we're setting or clearing the schedule
+    let schedule_time = if clear {
+        if time.is_some() {
+            bail!("Cannot use --clear with a time argument");
+        }
+        None
+    } else {
+        match time {
+            Some(time_str) => {
+                // Parse time in HH:MM format
+                let parts: Vec<&str> = time_str.split(':').collect();
+                if parts.len() != 2 {
+                    bail!("Invalid time format '{}'. Use HH:MM format (e.g., 18:30)", time_str);
+                }
+                let hour: i32 = parts[0]
+                    .parse()
+                    .with_context(|| format!("Invalid hour: {}", parts[0]))?;
+                let minute: i32 = parts[1]
+                    .parse()
+                    .with_context(|| format!("Invalid minute: {}", parts[1]))?;
+                Some((hour, minute))
+            }
+            None => None, // No time provided and no --clear, so clear the schedule
+        }
+    };
+
+    match &schedule_time {
+        Some((hour, minute)) => {
+            println!("{}", format!("Setting schedule to {:02}:{:02}...", hour, minute).dimmed());
+        }
+        None => {
+            println!("{}", "Clearing schedule...".dimmed());
+        }
+    }
+
+    client.set_selected_time(&sauna_id, schedule_time).await?;
+
+    match schedule_time {
+        Some((hour, minute)) => {
+            println!(
+                "{} Schedule set to {:02}:{:02}",
+                "Success!".green().bold(),
+                hour,
+                minute
+            );
+        }
+        None => {
+            println!("{} Schedule cleared.", "Success!".green().bold());
+        }
+    }
+
+    Ok(())
+}
 
 /// Create an authenticated Klafs client using stored credentials
 async fn create_authenticated_client(

@@ -250,3 +250,12 @@ pub(crate) struct ConfigChangeRequest {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub selected_minute: Option<i32>,
 }
+
+/// Request body for SetSelectedTime endpoint (schedule without starting)
+#[derive(Debug, Serialize)]
+pub(crate) struct SetSelectedTimeRequest {
+    pub id: String,
+    pub time_set: bool,
+    pub hours: i32,
+    pub minutes: i32,
+}
