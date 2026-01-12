@@ -4,6 +4,9 @@ description = "Rust client library for the Klafs sauna control API"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+authors.workspace = true
+repository.workspace = true
+readme = "../README.md"
 
 [dependencies]
 tokio.workspace = true
