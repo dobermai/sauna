@@ -2,6 +2,8 @@
 
 A Rust library and CLI for controlling Klafs saunas via their cloud API.
 
+> **Disclaimer**: This is an unofficial, community-developed project. It is not affiliated with, endorsed by, or connected to KLAFS GmbH & Co. KG in any way. Use at your own risk.
+
 ## Overview
 
 This project provides:
@@ -318,9 +320,30 @@ klafs/
 
 ## Acknowledgments
 
-Based on reverse-engineering work from:
+Inspired by other community projects:
 - [dss-vdc-klafs](https://github.com/axe-world/dss-vdc-klafs)
 - [IPSymconKlafsSaunaControl](https://github.com/Pommespanzer/IPSymconKlafsSaunaControl)
+
+## Disclaimer & Legal
+
+### Trademark Notice
+
+"KLAFS" is a registered trademark of KLAFS GmbH & Co. KG. This project is not affiliated with, endorsed by, sponsored by, or otherwise connected to KLAFS GmbH & Co. KG. All product and company names are trademarks or registered trademarks of their respective holders. Use of them does not imply any affiliation or endorsement.
+
+### No Warranty
+
+THIS SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+### Use at Your Own Risk
+
+- This software interacts with third-party services and hardware. The authors are not responsible for any damage to your sauna, property, or any other consequences resulting from the use of this software.
+- The API may change at any time without notice, which could break functionality.
+- Improper use of sauna equipment can be dangerous. Always follow the manufacturer's safety guidelines.
+- **Klafs locks accounts after 3 failed login attempts.** Be careful with automated scripts.
+
+### Intended Use
+
+This software is intended for personal, non-commercial use by owners of Klafs saunas who wish to integrate their sauna with home automation systems or control it via command line. It is provided for educational and interoperability purposes.
 
 ## License
 
