@@ -1,8 +1,22 @@
-# Klafs Sauna Control
+<p align="center">
+  <img src="logo.png" alt="Sauna CLI Logo" width="200">
+</p>
 
-A Rust library and CLI for controlling Klafs saunas via their cloud API.
+<h1 align="center">Klafs Sauna Control</h1>
 
-> **Disclaimer**: This is an unofficial, community-developed project. It is not affiliated with, endorsed by, or connected to KLAFS GmbH & Co. KG in any way. Use at your own risk.
+<p align="center">
+  A Rust library and CLI for controlling Klafs saunas via their cloud API.
+</p>
+
+<p align="center">
+  <a href="#license"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License: MIT"></a>
+  <a href="https://www.rust-lang.org/"><img src="https://img.shields.io/badge/rust-1.70%2B-orange.svg" alt="Rust: 1.70+"></a>
+  <a href="#"><img src="https://img.shields.io/badge/platform-macOS%20%7C%20Linux%20%7C%20Windows-lightgrey.svg" alt="Platform"></a>
+</p>
+
+<p align="center">
+  <strong>⚠️ Unofficial project — not affiliated with KLAFS GmbH & Co. KG</strong>
+</p>
 
 ## Overview
 
