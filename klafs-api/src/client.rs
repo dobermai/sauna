@@ -12,6 +12,20 @@ use crate::models::{
     SaunaStatus, SetHumidityRequest, SetModeRequest, SetSelectedTimeRequest, SetTemperatureRequest,
 };
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Validation Helpers
+// ─────────────────────────────────────────────────────────────────────────────
+
+macro_rules! validate_range {
+    ($value:expr, $min:expr, $max:expr, $name:expr) => {
+        if !($min..=$max).contains(&$value) {
+            return Err(KlafsError::InvalidParameter {
+                message: format!("{} must be between {} and {}, got {}", $name, $min, $max, $value),
+            });
+        }
+    };
+}
+
 /// Default base URL for the Klafs API
 pub const DEFAULT_BASE_URL: &str = "https://sauna-app-19.klafs.com";
 
@@ -201,20 +215,21 @@ impl KlafsClient {
         // Submit the login form
         let login_url = format!("{}/Account/Login", self.base_url);
 
-        // Build form data - only include token if present
-        let form_body = match &token {
-            Some(t) => format!(
-                "UserName={}&Password={}&RememberMe=false&__RequestVerificationToken={}",
-                urlencoding::encode(username),
-                urlencoding::encode(password),
-                urlencoding::encode(t)
-            ),
-            None => format!(
-                "UserName={}&Password={}&RememberMe=false",
-                urlencoding::encode(username),
-                urlencoding::encode(password)
-            ),
-        };
+        // Build form parameters
+        let mut form_params: Vec<(&str, &str)> = vec![
+            ("UserName", username),
+            ("Password", password),
+            ("RememberMe", "false"),
+        ];
+        if let Some(ref t) = token {
+            form_params.push(("__RequestVerificationToken", t.as_str()));
+        }
+
+        let form_body = form_params
+            .iter()
+            .map(|(k, v)| format!("{}={}", k, urlencoding::encode(v)))
+            .collect::<Vec<_>>()
+            .join("&");
 
         let timer = Timer::start();
         let request_id = self
@@ -222,32 +237,7 @@ impl KlafsClient {
             .log_request("POST", &login_url, &reqwest::header::HeaderMap::new(), Some(&form_body))
             .await;
 
-        // Build the actual form submission
-        let response = match &token {
-            Some(t) => {
-                self.client
-                    .post(&login_url)
-                    .form(&[
-                        ("UserName", username),
-                        ("Password", password),
-                        ("RememberMe", "false"),
-                        ("__RequestVerificationToken", t.as_str()),
-                    ])
-                    .send()
-                    .await?
-            }
-            None => {
-                self.client
-                    .post(&login_url)
-                    .form(&[
-                        ("UserName", username),
-                        ("Password", password),
-                        ("RememberMe", "false"),
-                    ])
-                    .send()
-                    .await?
-            }
-        };
+        let response = self.client.post(&login_url).form(&form_params).send().await?;
 
         let status = response.status();
         let headers = response.headers().clone();
@@ -1103,59 +1093,28 @@ impl KlafsClient {
         Ok(())
     }
 
-    /// Validate temperature for sauna mode (10-100°C)
     fn validate_temperature(temperature: i32) -> Result<()> {
-        if !(10..=100).contains(&temperature) {
-            return Err(KlafsError::InvalidParameter {
-                message: format!(
-                    "Temperature must be between 10 and 100°C, got {}",
-                    temperature
-                ),
-            });
-        }
+        validate_range!(temperature, 10, 100, "Temperature (°C)");
         Ok(())
     }
 
-    /// Validate temperature for sanarium mode (40-75°C)
     fn validate_sanarium_temperature(temperature: i32) -> Result<()> {
-        if !(40..=75).contains(&temperature) {
-            return Err(KlafsError::InvalidParameter {
-                message: format!(
-                    "Sanarium temperature must be between 40 and 75°C, got {}",
-                    temperature
-                ),
-            });
-        }
+        validate_range!(temperature, 40, 75, "Sanarium temperature (°C)");
         Ok(())
     }
 
-    /// Validate humidity level (1-10)
     fn validate_humidity_level(level: i32) -> Result<()> {
-        if !(1..=10).contains(&level) {
-            return Err(KlafsError::InvalidParameter {
-                message: format!("Humidity level must be between 1 and 10, got {}", level),
-            });
-        }
+        validate_range!(level, 1, 10, "Humidity level");
         Ok(())
     }
 
-    /// Validate hour (0-23)
     fn validate_hour(hour: i32) -> Result<()> {
-        if !(0..=23).contains(&hour) {
-            return Err(KlafsError::InvalidParameter {
-                message: format!("Hour must be between 0 and 23, got {}", hour),
-            });
-        }
+        validate_range!(hour, 0, 23, "Hour");
         Ok(())
     }
 
-    /// Validate minute (0-59)
     fn validate_minute(minute: i32) -> Result<()> {
-        if !(0..=59).contains(&minute) {
-            return Err(KlafsError::InvalidParameter {
-                message: format!("Minute must be between 0 and 59, got {}", minute),
-            });
-        }
+        validate_range!(minute, 0, 59, "Minute");
         Ok(())
     }
 

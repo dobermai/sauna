@@ -10,6 +10,35 @@ mod profiles;
 use config::Config;
 use profiles::{Profile, Profiles};
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Helper Functions
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Parse a time string in HH:MM format
+fn parse_time(time_str: &str) -> Result<(i32, i32)> {
+    let parts: Vec<&str> = time_str.split(':').collect();
+    if parts.len() != 2 {
+        bail!("Invalid time format '{}'. Use HH:MM (e.g., 18:30)", time_str);
+    }
+    let hour: i32 = parts[0]
+        .parse()
+        .with_context(|| format!("Invalid hour: {}", parts[0]))?;
+    let minute: i32 = parts[1]
+        .parse()
+        .with_context(|| format!("Invalid minute: {}", parts[1]))?;
+    Ok((hour, minute))
+}
+
+/// Parse a mode string into SaunaMode
+fn parse_mode(mode: &str) -> Result<SaunaMode> {
+    match mode.to_lowercase().as_str() {
+        "sauna" => Ok(SaunaMode::Sauna),
+        "sanarium" => Ok(SaunaMode::Sanarium),
+        "infrared" | "ir" => Ok(SaunaMode::Infrared),
+        _ => bail!("Invalid mode '{}'. Use: sauna, sanarium, or infrared", mode),
+    }
+}
+
 #[derive(Parser)]
 #[command(name = "sauna")]
 #[command(author, version, about = "Control your Klafs sauna from the command line")]
@@ -667,47 +696,16 @@ async fn cmd_power_on(
             .context("No PIN provided. Use --pin or store it with 'sauna config --pin <PIN>'")?,
     };
 
-    // Parse optional schedule time
-    let schedule_time = match schedule {
-        Some(time_str) => {
-            let parts: Vec<&str> = time_str.split(':').collect();
-            if parts.len() != 2 {
-                bail!("Invalid time format '{}'. Use HH:MM format (e.g., 18:30)", time_str);
-            }
-            let hour: i32 = parts[0]
-                .parse()
-                .with_context(|| format!("Invalid hour: {}", parts[0]))?;
-            let minute: i32 = parts[1]
-                .parse()
-                .with_context(|| format!("Invalid minute: {}", parts[1]))?;
-            Some((hour, minute))
-        }
-        None => None,
-    };
+    let schedule_time = schedule.map(|s| parse_time(&s)).transpose()?;
 
-    match &schedule_time {
-        Some((hour, minute)) => {
-            println!("{}", format!("Scheduling sauna to start at {:02}:{:02}...", hour, minute).dimmed());
-        }
-        None => {
-            println!("{}", "Powering on sauna...".dimmed());
-        }
-    }
-
-    client.power_on(&sauna_id, &pin, schedule_time).await?;
-
-    match schedule_time {
-        Some((hour, minute)) => {
-            println!(
-                "{} Sauna scheduled to start at {:02}:{:02}",
-                "Success!".green().bold(),
-                hour,
-                minute
-            );
-        }
-        None => {
-            println!("{} Sauna is powering on!", "Success!".green().bold());
-        }
+    if let Some((hour, minute)) = schedule_time {
+        println!("{}", format!("Scheduling sauna to start at {:02}:{:02}...", hour, minute).dimmed());
+        client.power_on(&sauna_id, &pin, Some((hour, minute))).await?;
+        println!("{} Sauna scheduled to start at {:02}:{:02}", "Success!".green().bold(), hour, minute);
+    } else {
+        println!("{}", "Powering on sauna...".dimmed());
+        client.power_on(&sauna_id, &pin, None).await?;
+        println!("{} Sauna is powering on!", "Success!".green().bold());
     }
 
     Ok(())
@@ -764,25 +762,12 @@ async fn cmd_set_mode(
 ) -> Result<()> {
     let config = Config::load()?;
     let client = create_authenticated_client(&config, debug, debug_file).await?;
-
     let sauna_id = resolve_sauna_id(sauna_id, &config, &client).await?;
-
-    let sauna_mode = match mode.to_lowercase().as_str() {
-        "sauna" => SaunaMode::Sauna,
-        "sanarium" => SaunaMode::Sanarium,
-        "infrared" | "ir" => SaunaMode::Infrared,
-        _ => bail!("Invalid mode '{}'. Use: sauna, sanarium, or infrared", mode),
-    };
+    let sauna_mode = parse_mode(&mode)?;
 
     println!("{}", format!("Setting mode to {}...", mode).dimmed());
-
     client.set_mode(&sauna_id, sauna_mode).await?;
-
-    println!(
-        "{} Mode set to {}",
-        "Success!".green().bold(),
-        mode.cyan()
-    );
+    println!("{} Mode set to {}", "Success!".green().bold(), mode.cyan());
 
     Ok(())
 }
@@ -823,55 +808,20 @@ async fn cmd_schedule(
 
     let sauna_id = resolve_sauna_id(sauna_id, &config, &client).await?;
 
-    // Determine if we're setting or clearing the schedule
-    let schedule_time = if clear {
-        if time.is_some() {
-            bail!("Cannot use --clear with a time argument");
-        }
-        None
-    } else {
-        match time {
-            Some(time_str) => {
-                // Parse time in HH:MM format
-                let parts: Vec<&str> = time_str.split(':').collect();
-                if parts.len() != 2 {
-                    bail!("Invalid time format '{}'. Use HH:MM format (e.g., 18:30)", time_str);
-                }
-                let hour: i32 = parts[0]
-                    .parse()
-                    .with_context(|| format!("Invalid hour: {}", parts[0]))?;
-                let minute: i32 = parts[1]
-                    .parse()
-                    .with_context(|| format!("Invalid minute: {}", parts[1]))?;
-                Some((hour, minute))
-            }
-            None => None, // No time provided and no --clear, so clear the schedule
-        }
-    };
-
-    match &schedule_time {
-        Some((hour, minute)) => {
-            println!("{}", format!("Setting schedule to {:02}:{:02}...", hour, minute).dimmed());
-        }
-        None => {
-            println!("{}", "Clearing schedule...".dimmed());
-        }
+    if clear && time.is_some() {
+        bail!("Cannot use --clear with a time argument");
     }
 
-    client.set_selected_time(&sauna_id, schedule_time).await?;
+    let schedule_time = time.map(|s| parse_time(&s)).transpose()?;
 
-    match schedule_time {
-        Some((hour, minute)) => {
-            println!(
-                "{} Schedule set to {:02}:{:02}",
-                "Success!".green().bold(),
-                hour,
-                minute
-            );
-        }
-        None => {
-            println!("{} Schedule cleared.", "Success!".green().bold());
-        }
+    if let Some((hour, minute)) = schedule_time {
+        println!("{}", format!("Setting schedule to {:02}:{:02}...", hour, minute).dimmed());
+        client.set_selected_time(&sauna_id, Some((hour, minute))).await?;
+        println!("{} Schedule set to {:02}:{:02}", "Success!".green().bold(), hour, minute);
+    } else {
+        println!("{}", "Clearing schedule...".dimmed());
+        client.set_selected_time(&sauna_id, None).await?;
+        println!("{} Schedule cleared.", "Success!".green().bold());
     }
 
     Ok(())
@@ -889,27 +839,9 @@ async fn cmd_configure(
     let client = create_authenticated_client(&config, debug, debug_file).await?;
 
     let sauna_id = resolve_sauna_id(sauna_id, &config, &client).await?;
+    let schedule = time.map(|s| parse_time(&s)).transpose()?;
 
-    // Parse time if provided
-    let (hour, minute) = match time {
-        Some(time_str) => {
-            let parts: Vec<&str> = time_str.split(':').collect();
-            if parts.len() != 2 {
-                bail!("Invalid time format '{}'. Use HH:MM format (e.g., 18:30)", time_str);
-            }
-            let hour: i32 = parts[0]
-                .parse()
-                .with_context(|| format!("Invalid hour: {}", parts[0]))?;
-            let minute: i32 = parts[1]
-                .parse()
-                .with_context(|| format!("Invalid minute: {}", parts[1]))?;
-            (Some(hour), Some(minute))
-        }
-        None => (None, None),
-    };
-
-    // Check that at least one option is provided
-    if temp.is_none() && humidity.is_none() && hour.is_none() {
+    if temp.is_none() && humidity.is_none() && schedule.is_none() {
         bail!("No configuration options provided. Use --temp, --humidity, or --time.");
     }
 
@@ -921,27 +853,16 @@ async fn cmd_configure(
     if let Some(h) = humidity {
         changes.push(format!("humidity level {}", h));
     }
-    if let (Some(h), Some(m)) = (hour, minute) {
+    if let Some((h, m)) = schedule {
         changes.push(format!("start time {:02}:{:02}", h, m));
     }
 
-    println!(
-        "{}",
-        format!("Configuring: {}...", changes.join(", ")).dimmed()
-    );
+    println!("{}", format!("Configuring: {}...", changes.join(", ")).dimmed());
 
-    // Only pass the temperature as sauna_temperature; the API will use it based on current mode.
-    // Passing None for sanarium_temperature avoids triggering sanarium range validation (40-75°C)
-    // when the user sets higher temperatures (up to 100°C) for regular Sauna mode.
-    client
-        .configure(&sauna_id, temp, None, humidity, hour, minute)
-        .await?;
+    let (hour, minute) = schedule.map(|(h, m)| (Some(h), Some(m))).unwrap_or((None, None));
+    client.configure(&sauna_id, temp, None, humidity, hour, minute).await?;
 
-    println!(
-        "{} Configuration applied: {}",
-        "Success!".green().bold(),
-        changes.join(", ")
-    );
+    println!("{} Configuration applied: {}", "Success!".green().bold(), changes.join(", "));
 
     Ok(())
 }
@@ -1034,29 +955,19 @@ async fn cmd_profile(command: ProfileCommands, debug: bool, debug_file: &Path) -
 
             let client = create_authenticated_client(&config, debug, debug_file).await?;
             let sauna_id = resolve_sauna_id(sauna_id, &config, &client).await?;
+            let sauna_mode = parse_mode(&profile.mode)
+                .with_context(|| format!("Invalid mode in profile: {}", profile.mode))?;
 
-            // First set the mode
-            let sauna_mode = match profile.mode.as_str() {
-                "sauna" => SaunaMode::Sauna,
-                "sanarium" => SaunaMode::Sanarium,
-                "infrared" => SaunaMode::Infrared,
-                _ => bail!("Invalid mode in profile: {}", profile.mode),
-            };
+            println!("{}", format!("Applying profile '{}'...", name).dimmed());
 
-            println!(
-                "{}",
-                format!("Applying profile '{}'...", name).dimmed()
-            );
-
-            // Set mode
             client.set_mode(&sauna_id, sauna_mode).await?;
-
-            // Apply temperature and levels using FavoriteSelected
-            let humidity_level = profile.humidity.unwrap_or(0);
-            let ir_level = profile.ir_level.unwrap_or(0);
-
             client
-                .apply_favorite(&sauna_id, profile.temperature, humidity_level, ir_level)
+                .apply_favorite(
+                    &sauna_id,
+                    profile.temperature,
+                    profile.humidity.unwrap_or(0),
+                    profile.ir_level.unwrap_or(0),
+                )
                 .await?;
 
             println!(
