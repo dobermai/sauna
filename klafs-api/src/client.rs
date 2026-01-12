@@ -58,7 +58,7 @@ impl ClientConfig {
 /// # Example
 ///
 /// ```no_run
-/// use klafs_core::KlafsClient;
+/// use klafs_api::KlafsClient;
 ///
 /// #[tokio::main]
 /// async fn main() -> Result<(), Box<dyn std::error::Error>> {

@@ -1,5 +1,5 @@
 [package]
-name = "klafs-core"
+name = "klafs-api"
 description = "Rust client library for the Klafs sauna control API"
 version.workspace = true
 edition.workspace = true

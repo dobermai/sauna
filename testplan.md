@@ -1,6 +1,6 @@
 # Manual Test Plan
 
-Manual verification of the Klafs CLI against the real API.
+Manual verification of the sauna CLI against the real Klafs API.
 
 **Prerequisites:**
 - Valid Klafs account with registered sauna
@@ -13,7 +13,7 @@ Manual verification of the Klafs CLI against the real API.
 
 - [ ] **Login with valid credentials**
   ```bash
-  klafs login -u your@email.com
+  sauna login -u your@email.com
   ```
   - [ ] Password prompt appears
   - [ ] Success message displayed
@@ -21,14 +21,14 @@ Manual verification of the Klafs CLI against the real API.
 
 - [ ] **Login with invalid credentials**
   ```bash
-  klafs login -u wrong@email.com
+  sauna login -u wrong@email.com
   ```
   - [ ] Error message displayed
   - [ ] No credentials stored
 
 - [ ] **Logout**
   ```bash
-  klafs logout
+  sauna logout
   ```
   - [ ] Success message displayed
   - [ ] Credentials removed from keyring
@@ -39,32 +39,32 @@ Manual verification of the Klafs CLI against the real API.
 
 - [ ] **List saunas**
   ```bash
-  klafs saunas
+  sauna saunas
   ```
   - [ ] Shows registered sauna(s) with names and IDs
 
 - [ ] **List saunas (JSON)**
   ```bash
-  klafs saunas --json
+  sauna saunas --json
   ```
   - [ ] Valid JSON output
 
 - [ ] **Set default sauna ID**
   ```bash
-  klafs config --sauna-id "your-sauna-uuid"
+  sauna config --sauna-id "your-sauna-uuid"
   ```
   - [ ] Success message displayed
 
 - [ ] **Store PIN**
   ```bash
-  klafs config --pin "1234"
+  sauna config --pin "1234"
   ```
   - [ ] Success message displayed
   - [ ] PIN stored in keyring
 
 - [ ] **Show configuration**
   ```bash
-  klafs config --show
+  sauna config --show
   ```
   - [ ] Shows username, sauna ID, PIN status
 
@@ -74,7 +74,7 @@ Manual verification of the Klafs CLI against the real API.
 
 - [ ] **Get status (human-readable)**
   ```bash
-  klafs status
+  sauna status
   ```
   - [ ] Shows connection status
   - [ ] Shows power status
@@ -84,7 +84,7 @@ Manual verification of the Klafs CLI against the real API.
 
 - [ ] **Get status (JSON)**
   ```bash
-  klafs status --json
+  sauna status --json
   ```
   - [ ] Valid JSON output with all fields
 
@@ -94,21 +94,21 @@ Manual verification of the Klafs CLI against the real API.
 
 - [ ] **Power on immediately**
   ```bash
-  klafs power-on
+  sauna power-on
   ```
   - [ ] Success message displayed
   - [ ] Sauna begins heating (verify via status)
 
 - [ ] **Power on with schedule**
   ```bash
-  klafs power-on --at 18:30
+  sauna power-on --at 18:30
   ```
   - [ ] Success message with scheduled time
   - [ ] Verify schedule via status
 
 - [ ] **Power off**
   ```bash
-  klafs power-off
+  sauna power-off
   ```
   - [ ] Success message displayed
   - [ ] Sauna powers off (verify via status)
@@ -119,21 +119,21 @@ Manual verification of the Klafs CLI against the real API.
 
 - [ ] **Set mode to Sauna**
   ```bash
-  klafs set-mode sauna
+  sauna set-mode sauna
   ```
   - [ ] Success message displayed
   - [ ] Mode changed (verify via status)
 
 - [ ] **Set mode to Sanarium**
   ```bash
-  klafs set-mode sanarium
+  sauna set-mode sanarium
   ```
   - [ ] Success message displayed
   - [ ] Mode changed (verify via status)
 
 - [ ] **Set mode to Infrared**
   ```bash
-  klafs set-mode infrared
+  sauna set-mode infrared
   ```
   - [ ] Success message displayed (or appropriate error if not supported)
 
@@ -143,20 +143,20 @@ Manual verification of the Klafs CLI against the real API.
 
 - [ ] **Set temperature (valid range)**
   ```bash
-  klafs set-temp 85
+  sauna set-temp 85
   ```
   - [ ] Success message displayed
   - [ ] Temperature changed (verify via status)
 
 - [ ] **Set temperature (invalid - too low)**
   ```bash
-  klafs set-temp 5
+  sauna set-temp 5
   ```
   - [ ] Error message displayed
 
 - [ ] **Set temperature (invalid - too high)**
   ```bash
-  klafs set-temp 150
+  sauna set-temp 150
   ```
   - [ ] Error message displayed
 
@@ -166,14 +166,14 @@ Manual verification of the Klafs CLI against the real API.
 
 - [ ] **Set humidity level (in sanarium mode)**
   ```bash
-  klafs set-humidity 7
+  sauna set-humidity 7
   ```
   - [ ] Success message displayed
   - [ ] Humidity level changed (verify via status)
 
 - [ ] **Set humidity level (invalid)**
   ```bash
-  klafs set-humidity 15
+  sauna set-humidity 15
   ```
   - [ ] Error message displayed
 
@@ -183,14 +183,14 @@ Manual verification of the Klafs CLI against the real API.
 
 - [ ] **Set schedule**
   ```bash
-  klafs schedule 18:30
+  sauna schedule 18:30
   ```
   - [ ] Success message displayed
   - [ ] Schedule set (verify via status)
 
 - [ ] **Clear schedule**
   ```bash
-  klafs schedule --clear
+  sauna schedule --clear
   ```
   - [ ] Success message displayed
   - [ ] Schedule cleared (verify via status)
@@ -201,14 +201,14 @@ Manual verification of the Klafs CLI against the real API.
 
 - [ ] **Set temperature and humidity**
   ```bash
-  klafs configure --temp 70 --humidity 5
+  sauna configure --temp 70 --humidity 5
   ```
   - [ ] Success message displayed
   - [ ] Both settings applied (verify via status)
 
 - [ ] **Set temperature and schedule**
   ```bash
-  klafs configure --temp 80 --time 19:00
+  sauna configure --temp 80 --time 19:00
   ```
   - [ ] Success message displayed
   - [ ] Both settings applied (verify via status)
@@ -219,45 +219,45 @@ Manual verification of the Klafs CLI against the real API.
 
 - [ ] **Create profile (sauna)**
   ```bash
-  klafs profile create hot --mode sauna --temp 90
+  sauna profile create hot --mode sauna --temp 90
   ```
   - [ ] Success message displayed
 
 - [ ] **Create profile (sanarium)**
   ```bash
-  klafs profile create relaxed --mode sanarium --temp 60 --humidity 7
+  sauna profile create relaxed --mode sanarium --temp 60 --humidity 7
   ```
   - [ ] Success message displayed
 
 - [ ] **List profiles**
   ```bash
-  klafs profile list
+  sauna profile list
   ```
   - [ ] Shows created profiles with descriptions
 
 - [ ] **Show profile details**
   ```bash
-  klafs profile show hot
+  sauna profile show hot
   ```
   - [ ] Shows mode, temperature, humidity
 
 - [ ] **Apply profile**
   ```bash
-  klafs profile apply hot
+  sauna profile apply hot
   ```
   - [ ] Success message displayed
   - [ ] Settings applied (verify via status)
 
 - [ ] **Apply profile and start**
   ```bash
-  klafs profile apply hot --start
+  sauna profile apply hot --start
   ```
   - [ ] Profile applied
   - [ ] Sauna started (verify via status)
 
 - [ ] **Delete profile**
   ```bash
-  klafs profile delete hot
+  sauna profile delete hot
   ```
   - [ ] Success message displayed
   - [ ] Profile removed (verify via list)
@@ -268,14 +268,14 @@ Manual verification of the Klafs CLI against the real API.
 
 - [ ] **Enable debug logging**
   ```bash
-  klafs --debug status
+  sauna --debug status
   ```
   - [ ] Debug output written to klafs-debug.log
   - [ ] Contains HTTP requests/responses
 
 - [ ] **Custom debug file**
   ```bash
-  klafs --debug --debug-file custom.log status
+  sauna --debug --debug-file custom.log status
   ```
   - [ ] Debug output written to custom.log
 
@@ -285,7 +285,7 @@ Manual verification of the Klafs CLI against the real API.
 
 - [ ] **Invalid PIN**
   ```bash
-  klafs power-on --pin 0000
+  sauna power-on --pin 0000
   ```
   - [ ] Appropriate error message
 

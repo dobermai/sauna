@@ -1,6 +1,6 @@
 //! Integration tests using wiremock for mock HTTP server
 
-use klafs_core::{ClientConfig, DebugConfig, KlafsClient, KlafsError, SaunaMode};
+use klafs_api::{ClientConfig, DebugConfig, KlafsClient, KlafsError, SaunaMode};
 use wiremock::matchers::{body_string_contains, method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 

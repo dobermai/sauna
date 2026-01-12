@@ -1,7 +1,7 @@
 use anyhow::{bail, Context, Result};
 use clap::{Parser, Subcommand};
 use colored::Colorize;
-use klafs_core::{ClientConfig, DebugConfig, KlafsClient, SaunaInfo, SaunaMode, SaunaStatus, StatusCode};
+use klafs_api::{ClientConfig, DebugConfig, KlafsClient, SaunaInfo, SaunaMode, SaunaStatus, StatusCode};
 use std::path::{Path, PathBuf};
 
 mod config;
@@ -11,7 +11,7 @@ use config::Config;
 use profiles::{Profile, Profiles};
 
 #[derive(Parser)]
-#[command(name = "klafs")]
+#[command(name = "sauna")]
 #[command(author, version, about = "Control your Klafs sauna from the command line")]
 #[command(propagate_version = true)]
 struct Cli {

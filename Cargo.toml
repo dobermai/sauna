@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["klafs-core", "klafs-cli"]
+members = ["klafs-api", "sauna"]
 
 [workspace.package]
 version = "0.1.0"
@@ -45,4 +45,4 @@ chrono = { version = "0.4", features = ["serde"] }
 wiremock = "0.6"
 
 # Local crates
-klafs-core = { path = "klafs-core" }
+klafs-api = { path = "klafs-api" }

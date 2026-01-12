@@ -6,8 +6,8 @@ A Rust library and CLI for controlling Klafs saunas via their cloud API.
 
 This project provides:
 
-- **klafs-core** - A Rust library for interacting with the Klafs sauna API
-- **klafs-cli** - A command-line tool for controlling your sauna
+- **klafs-api** - A Rust library for interacting with the Klafs sauna API
+- **sauna** - A command-line tool for controlling your sauna
 
 ## Installation
 
@@ -16,7 +16,7 @@ This project provides:
 ```bash
 git clone https://github.com/yourusername/klafs.git
 cd klafs
-cargo install --path klafs-cli
+cargo install --path sauna
 ```
 
 ## CLI Usage
@@ -25,13 +25,13 @@ cargo install --path klafs-cli
 
 ```bash
 # Enable verbose logging
-klafs --verbose <command>
+sauna --verbose <command>
 
 # Enable HTTP debug output (shows all requests/responses)
-klafs --debug <command>
+sauna --debug <command>
 
 # Save debug output to a file
-klafs --debug-file debug.log <command>
+sauna --debug-file debug.log <command>
 ```
 
 ### Login
@@ -39,7 +39,7 @@ klafs --debug-file debug.log <command>
 Authenticate with your Klafs account. Credentials are stored securely in your system keyring.
 
 ```bash
-klafs login -u your@email.com
+sauna login -u your@email.com
 # Password will be prompted securely
 ```
 
@@ -51,10 +51,10 @@ List all saunas registered to your account:
 
 ```bash
 # Human-readable output
-klafs saunas
+sauna saunas
 
 # JSON output
-klafs saunas --json
+sauna saunas --json
 ```
 
 Example output:
@@ -69,7 +69,7 @@ Registered Saunas
   Guest House Sauna
     ID: a1b2c3d4-e5f6-7890-abcd-ef1234567890
 
-Use 'klafs config --sauna-id <ID>' to set a default.
+Use 'sauna config --sauna-id <ID>' to set a default.
 ```
 
 ### Configure Defaults
@@ -77,26 +77,26 @@ Use 'klafs config --sauna-id <ID>' to set a default.
 Set your default sauna ID to avoid specifying it with every command:
 
 ```bash
-klafs config --sauna-id "your-sauna-uuid"
+sauna config --sauna-id "your-sauna-uuid"
 
 # Store PIN for power control (stored in system keyring)
-klafs config --pin "1234"
+sauna config --pin "1234"
 
 # View current configuration
-klafs config --show
+sauna config --show
 ```
 
 ### Get Sauna Status
 
 ```bash
 # Human-readable output
-klafs status
+sauna status
 
 # JSON output
-klafs status --json
+sauna status --json
 
 # Specify a different sauna
-klafs status --sauna-id "another-sauna-uuid"
+sauna status --sauna-id "another-sauna-uuid"
 ```
 
 Example output:
@@ -119,40 +119,40 @@ Sauna Status
 
 ```bash
 # Power on immediately (requires PIN)
-klafs power-on
+sauna power-on
 
 # Schedule power on for a specific time
-klafs power-on --at 18:30
+sauna power-on --at 18:30
 
 # Power off
-klafs power-off
+sauna power-off
 ```
 
 ### Temperature and Mode
 
 ```bash
 # Set temperature (10-100°C)
-klafs set-temp 85
+sauna set-temp 85
 
 # Set mode: sauna, sanarium, or infrared
-klafs set-mode sauna
+sauna set-mode sauna
 ```
 
 ### Humidity Control
 
 ```bash
 # Set humidity level (1-10, for Sanarium mode)
-klafs set-humidity 7
+sauna set-humidity 7
 ```
 
 ### Scheduling
 
 ```bash
 # Set scheduled start time (without starting)
-klafs schedule 18:30
+sauna schedule 18:30
 
 # Clear the schedule
-klafs schedule --clear
+sauna schedule --clear
 ```
 
 ### Profiles
@@ -161,23 +161,23 @@ Save and reuse sauna configurations:
 
 ```bash
 # Create a profile
-klafs profile create hot --mode sauna --temp 90
-klafs profile create relaxed --mode sanarium --temp 60 --humidity 7
+sauna profile create hot --mode sauna --temp 90
+sauna profile create relaxed --mode sanarium --temp 60 --humidity 7
 
 # List all profiles
-klafs profile list
+sauna profile list
 
 # Show profile details
-klafs profile show hot
+sauna profile show hot
 
 # Apply a profile (sets mode, temperature, humidity)
-klafs profile apply hot
+sauna profile apply hot
 
 # Apply and start the sauna
-klafs profile apply hot --start
+sauna profile apply hot --start
 
 # Delete a profile
-klafs profile delete hot
+sauna profile delete hot
 ```
 
 Profiles are stored in `~/.config/klafs/profiles.toml`.
@@ -188,13 +188,13 @@ Set multiple parameters in one command:
 
 ```bash
 # Set temperature and humidity
-klafs configure --temp 85 --humidity 5
+sauna configure --temp 85 --humidity 5
 
 # Set temperature and schedule
-klafs configure --temp 85 --time 18:30
+sauna configure --temp 85 --time 18:30
 
 # Set all at once
-klafs configure --temp 85 --humidity 5 --time 18:30
+sauna configure --temp 85 --humidity 5 --time 18:30
 ```
 
 ## Library Usage
@@ -203,14 +203,14 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-klafs-core = { path = "klafs-core" }
+klafs-api = { path = "klafs-api" }
 tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
 ```
 
 Example:
 
 ```rust
-use klafs_core::KlafsClient;
+use klafs_api::KlafsClient;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -277,7 +277,7 @@ Base URL: `https://sauna-app-19.klafs.com`
 ```
 klafs/
 ├── Cargo.toml              # Workspace manifest
-├── klafs-core/             # Core library
+├── klafs-api/             # Core library
 │   ├── src/
 │   │   ├── lib.rs          # Public API
 │   │   ├── client.rs       # HTTP client
@@ -287,7 +287,7 @@ klafs/
 │   └── tests/
 │       ├── fixtures/       # Test fixtures (HTML, JSON)
 │       └── integration_tests.rs
-└── klafs-cli/              # CLI application
+└── sauna/                  # CLI application
     └── src/
         ├── main.rs         # CLI commands
         ├── config.rs       # Configuration & keyring

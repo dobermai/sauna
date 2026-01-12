@@ -15,7 +15,7 @@
 //! # Example
 //!
 //! ```no_run
-//! use klafs_core::{KlafsClient, SaunaMode};
+//! use klafs_api::{KlafsClient, SaunaMode};
 //!
 //! #[tokio::main]
 //! async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -44,7 +44,7 @@
 //! Enable HTTP traffic logging for debugging:
 //!
 //! ```no_run
-//! use klafs_core::{KlafsClient, ClientConfig, DebugConfig};
+//! use klafs_api::{KlafsClient, ClientConfig, DebugConfig};
 //! use std::path::PathBuf;
 //!
 //! let config = ClientConfig {
