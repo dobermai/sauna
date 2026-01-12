@@ -8,12 +8,12 @@ use tracing::{debug, info, instrument, warn};
 use crate::debug::{DebugConfig, HttpDebugger, Timer};
 use crate::error::{KlafsError, Result};
 use crate::models::{
-    ConfigChangeRequest, GetSaunaStatusRequest, PowerControlRequest, SaunaInfo, SaunaMode,
-    SaunaStatus, SetHumidityRequest, SetModeRequest, SetTemperatureRequest,
+    ConfigChangeRequest, PowerControlRequest, SaunaInfo, SaunaMode, SaunaStatus,
+    SetHumidityRequest, SetModeRequest, SetTemperatureRequest,
 };
 
 /// Default base URL for the Klafs API
-pub const DEFAULT_BASE_URL: &str = "https://sauna-app.klafs.com";
+pub const DEFAULT_BASE_URL: &str = "https://sauna-app-19.klafs.com";
 
 /// User agent to use for requests (mimics the mobile app)
 const USER_AGENT: &str = "KlafsSaunaApp/1.0";
@@ -273,19 +273,14 @@ impl KlafsClient {
         debug!("Getting status for sauna {}", sauna_id);
         let timer = Timer::start();
 
-        let url = format!("{}/Control/GetSaunaStatus", self.base_url);
+        let url = format!("{}/SaunaApp/GetData?id={}", self.base_url, sauna_id);
 
-        let request = GetSaunaStatusRequest {
-            sauna_id: sauna_id.to_string(),
-        };
-
-        let body = serde_json::to_string(&request)?;
         let request_id = self
             .debugger
-            .log_request("POST", &url, &reqwest::header::HeaderMap::new(), Some(&body))
+            .log_request("GET", &url, &reqwest::header::HeaderMap::new(), None)
             .await;
 
-        let response = self.client.post(&url).json(&request).send().await?;
+        let response = self.client.get(&url).send().await?;
 
         let status = response.status();
         let headers = response.headers().clone();
@@ -372,33 +367,16 @@ impl KlafsClient {
     #[instrument(skip(self, pin), fields(sauna_id = %sauna_id))]
     pub async fn power_on(&self, sauna_id: &str, pin: &str) -> Result<()> {
         info!("Powering on sauna {}", sauna_id);
-
-        self.send_power_command(sauna_id, pin, true).await
-    }
-
-    /// Power off the sauna
-    ///
-    /// # Arguments
-    ///
-    /// * `sauna_id` - UUID of the sauna
-    /// * `pin` - PIN code for power control
-    #[instrument(skip(self, pin), fields(sauna_id = %sauna_id))]
-    pub async fn power_off(&self, sauna_id: &str, pin: &str) -> Result<()> {
-        info!("Powering off sauna {}", sauna_id);
-
-        self.send_power_command(sauna_id, pin, false).await
-    }
-
-    /// Internal helper for power commands
-    async fn send_power_command(&self, sauna_id: &str, pin: &str, power_on: bool) -> Result<()> {
         let timer = Timer::start();
 
-        let endpoint = if power_on { "StartCabin" } else { "StopCabin" };
-        let url = format!("{}/SaunaApp/{}", self.base_url, endpoint);
+        let url = format!("{}/SaunaApp/StartCabin", self.base_url);
 
         let request = PowerControlRequest {
-            sauna_id: sauna_id.to_string(),
+            id: sauna_id.to_string(),
             pin: pin.to_string(),
+            time_selected: false,
+            sel_hour: None,
+            sel_min: None,
         };
 
         let body = serde_json::to_string(&request)?;
@@ -435,12 +413,59 @@ impl KlafsClient {
             });
         }
 
-        info!(
-            "Sauna {} power {}",
-            sauna_id,
-            if power_on { "on" } else { "off" }
-        );
+        info!("Sauna {} powered on", sauna_id);
+        Ok(())
+    }
 
+    /// Power off the sauna
+    ///
+    /// Note: PIN is not required for power off
+    ///
+    /// # Arguments
+    ///
+    /// * `sauna_id` - UUID of the sauna
+    #[instrument(skip(self), fields(sauna_id = %sauna_id))]
+    pub async fn power_off(&self, sauna_id: &str) -> Result<()> {
+        info!("Powering off sauna {}", sauna_id);
+        let timer = Timer::start();
+
+        let url = format!("{}/SaunaApp/StopCabin", self.base_url);
+
+        // StopCabin uses a different request format - just the sauna ID
+        let request = serde_json::json!({
+            "id": sauna_id
+        });
+
+        let body = serde_json::to_string(&request)?;
+        let request_id = self
+            .debugger
+            .log_request("POST", &url, &reqwest::header::HeaderMap::new(), Some(&body))
+            .await;
+
+        let response = self.client.post(&url).json(&request).send().await?;
+
+        let status = response.status();
+        let headers = response.headers().clone();
+        let response_text = response.text().await?;
+
+        self.debugger
+            .log_response(&request_id, status.as_u16(), &headers, Some(&response_text), timer.elapsed_ms())
+            .await;
+
+        if status == reqwest::StatusCode::UNAUTHORIZED
+            || status == reqwest::StatusCode::FORBIDDEN
+        {
+            return Err(KlafsError::SessionExpired);
+        }
+
+        if !status.is_success() {
+            return Err(KlafsError::ApiError {
+                status_code: status.as_u16(),
+                message: response_text,
+            });
+        }
+
+        info!("Sauna {} powered off", sauna_id);
         Ok(())
     }
 
@@ -458,8 +483,8 @@ impl KlafsClient {
         let url = format!("{}/SaunaApp/SetMode", self.base_url);
 
         let request = SetModeRequest {
-            sauna_id: sauna_id.to_string(),
-            mode: mode.into(),
+            id: sauna_id.to_string(),
+            selected_mode: mode.into(),
         };
 
         let body = serde_json::to_string(&request)?;
@@ -513,7 +538,7 @@ impl KlafsClient {
         let url = format!("{}/SaunaApp/ChangeTemperature", self.base_url);
 
         let request = SetTemperatureRequest {
-            sauna_id: sauna_id.to_string(),
+            id: sauna_id.to_string(),
             temperature,
         };
 
@@ -563,8 +588,8 @@ impl KlafsClient {
         let url = format!("{}/SaunaApp/ChangeHumLevel", self.base_url);
 
         let request = SetHumidityRequest {
-            sauna_id: sauna_id.to_string(),
-            hum_level: level,
+            id: sauna_id.to_string(),
+            level,
         };
 
         let body = serde_json::to_string(&request)?;
@@ -616,7 +641,7 @@ impl KlafsClient {
         );
         let timer = Timer::start();
 
-        let url = format!("{}/Control/PostConfigChange", self.base_url);
+        let url = format!("{}/SaunaApp/PostConfigChange", self.base_url);
 
         let request = ConfigChangeRequest {
             sauna_id: sauna_id.to_string(),

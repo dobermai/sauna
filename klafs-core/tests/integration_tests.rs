@@ -114,8 +114,8 @@ mod status_tests {
         let client = setup_logged_in_client(&mock_server).await;
 
         // Mock the status endpoint
-        Mock::given(method("POST"))
-            .and(path("/Control/GetSaunaStatus"))
+        Mock::given(method("GET"))
+            .and(path("/SaunaApp/GetData"))
             .respond_with(ResponseTemplate::new(200).set_body_string(fixture("sauna_status.json")))
             .mount(&mock_server)
             .await;
@@ -139,8 +139,8 @@ mod status_tests {
         let mock_server = MockServer::start().await;
         let client = setup_logged_in_client(&mock_server).await;
 
-        Mock::given(method("POST"))
-            .and(path("/Control/GetSaunaStatus"))
+        Mock::given(method("GET"))
+            .and(path("/SaunaApp/GetData"))
             .respond_with(
                 ResponseTemplate::new(200).set_body_string(fixture("sauna_status_powered_on.json")),
             )
@@ -164,8 +164,8 @@ mod status_tests {
         let mock_server = MockServer::start().await;
         let client = create_test_client(&mock_server);
 
-        Mock::given(method("POST"))
-            .and(path("/Control/GetSaunaStatus"))
+        Mock::given(method("GET"))
+            .and(path("/SaunaApp/GetData"))
             .respond_with(ResponseTemplate::new(401))
             .mount(&mock_server)
             .await;
@@ -281,7 +281,7 @@ mod power_control_tests {
             .await;
 
         let result = client
-            .power_off("364cc9db-86f1-49d1-86cd-f6ef9b20a490", "1234")
+            .power_off("364cc9db-86f1-49d1-86cd-f6ef9b20a490")
             .await;
 
         assert!(result.is_ok());
@@ -427,7 +427,7 @@ mod control_tests {
         let client = setup_logged_in_client(&mock_server).await;
 
         Mock::given(method("POST"))
-            .and(path("/Control/PostConfigChange"))
+            .and(path("/SaunaApp/PostConfigChange"))
             .respond_with(ResponseTemplate::new(200).set_body_string(r#"{"success": true}"#))
             .mount(&mock_server)
             .await;

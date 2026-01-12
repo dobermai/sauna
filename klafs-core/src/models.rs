@@ -201,43 +201,37 @@ impl SaunaStatus {
     }
 }
 
-/// Request body for GetSaunaStatus endpoint
+/// Request body for StartCabin endpoint
 #[derive(Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub(crate) struct GetSaunaStatusRequest {
-    pub sauna_id: String,
-}
-
-/// Request body for power control endpoints
-#[derive(Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
 pub(crate) struct PowerControlRequest {
-    pub sauna_id: String,
+    pub id: String,
     pub pin: String,
+    pub time_selected: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sel_hour: Option<i32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sel_min: Option<i32>,
 }
 
 /// Request body for setting temperature
 #[derive(Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
 pub(crate) struct SetTemperatureRequest {
-    pub sauna_id: String,
+    pub id: String,
     pub temperature: i32,
 }
 
 /// Request body for setting humidity level
 #[derive(Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
 pub(crate) struct SetHumidityRequest {
-    pub sauna_id: String,
-    pub hum_level: i32,
+    pub id: String,
+    pub level: i32,
 }
 
 /// Request body for setting mode
 #[derive(Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
 pub(crate) struct SetModeRequest {
-    pub sauna_id: String,
-    pub mode: u8,
+    pub id: String,
+    pub selected_mode: u8,
 }
 
 /// Configuration change request for PostConfigChange endpoint

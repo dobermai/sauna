@@ -89,15 +89,11 @@ enum Commands {
         pin: Option<String>,
     },
 
-    /// Power off the sauna
+    /// Power off the sauna (no PIN required)
     PowerOff {
         /// Sauna ID (uses default from config if not provided)
         #[arg(short, long)]
         sauna_id: Option<String>,
-
-        /// PIN for power control
-        #[arg(short, long)]
-        pin: Option<String>,
     },
 
     /// Set the target temperature
@@ -169,8 +165,8 @@ async fn main() -> Result<()> {
         Commands::PowerOn { sauna_id, pin } => {
             cmd_power_on(sauna_id, pin, cli.debug, &cli.debug_file).await
         }
-        Commands::PowerOff { sauna_id, pin } => {
-            cmd_power_off(sauna_id, pin, cli.debug, &cli.debug_file).await
+        Commands::PowerOff { sauna_id } => {
+            cmd_power_off(sauna_id, cli.debug, &cli.debug_file).await
         }
         Commands::SetTemp {
             temperature,
@@ -558,7 +554,6 @@ async fn cmd_power_on(
 
 async fn cmd_power_off(
     sauna_id: Option<String>,
-    pin: Option<String>,
     debug: bool,
     debug_file: &Path,
 ) -> Result<()> {
@@ -569,15 +564,9 @@ async fn cmd_power_off(
         "No sauna ID provided. Use --sauna-id or set a default with 'klafs config --sauna-id <ID>'",
     )?;
 
-    let pin = match pin {
-        Some(p) => p,
-        None => Config::get_pin(&sauna_id)?
-            .context("No PIN provided. Use --pin or store it with 'klafs config --pin <PIN>'")?,
-    };
-
     println!("{}", "Powering off sauna...".dimmed());
 
-    client.power_off(&sauna_id, &pin).await?;
+    client.power_off(&sauna_id).await?;
 
     println!("{} Sauna powered off.", "Success!".green().bold());
 
