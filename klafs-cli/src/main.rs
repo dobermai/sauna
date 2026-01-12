@@ -132,16 +132,6 @@ enum Commands {
         sauna_id: Option<String>,
     },
 
-    /// Set the scheduled start time (deprecated, use 'schedule' instead)
-    SetTime {
-        /// Start time in HH:MM format (e.g., 18:30)
-        time: String,
-
-        /// Sauna ID (uses default from config if not provided)
-        #[arg(short, long)]
-        sauna_id: Option<String>,
-    },
-
     /// Set or clear the scheduled start time without starting the sauna
     Schedule {
         /// Start time in HH:MM format (e.g., 18:30). Omit to clear schedule.
@@ -280,9 +270,6 @@ async fn main() -> Result<()> {
         }
         Commands::SetHumidity { level, sauna_id } => {
             cmd_set_humidity(level, sauna_id, cli.debug, &cli.debug_file).await
-        }
-        Commands::SetTime { time, sauna_id } => {
-            cmd_set_time(time, sauna_id, cli.debug, &cli.debug_file).await
         }
         Commands::Schedule { time, sauna_id, clear } => {
             cmd_schedule(time, sauna_id, clear, cli.debug, &cli.debug_file).await
@@ -804,45 +791,6 @@ async fn cmd_set_humidity(
         "{} Humidity level set to {}",
         "Success!".green().bold(),
         level.to_string().cyan()
-    );
-
-    Ok(())
-}
-
-async fn cmd_set_time(
-    time: String,
-    sauna_id: Option<String>,
-    debug: bool,
-    debug_file: &Path,
-) -> Result<()> {
-    let config = Config::load()?;
-    let client = create_authenticated_client(&config, debug, debug_file).await?;
-
-    let sauna_id = sauna_id.or(config.sauna_id).context(
-        "No sauna ID provided. Use --sauna-id or set a default with 'klafs config --sauna-id <ID>'",
-    )?;
-
-    // Parse time in HH:MM format
-    let parts: Vec<&str> = time.split(':').collect();
-    if parts.len() != 2 {
-        bail!("Invalid time format '{}'. Use HH:MM format (e.g., 18:30)", time);
-    }
-
-    let hour: i32 = parts[0]
-        .parse()
-        .with_context(|| format!("Invalid hour: {}", parts[0]))?;
-    let minute: i32 = parts[1]
-        .parse()
-        .with_context(|| format!("Invalid minute: {}", parts[1]))?;
-
-    println!("{}", format!("Setting start time to {}...", time).dimmed());
-
-    client.set_start_time(&sauna_id, hour, minute).await?;
-
-    println!(
-        "{} Start time set to {}",
-        "Success!".green().bold(),
-        time.cyan()
     );
 
     Ok(())

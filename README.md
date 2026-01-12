@@ -153,9 +153,6 @@ klafs schedule 18:30
 
 # Clear the schedule
 klafs schedule --clear
-
-# Legacy command (deprecated)
-klafs set-time 18:30
 ```
 
 ### Profiles
@@ -317,7 +314,7 @@ klafs/
 - [x] HTTP traffic debugging
 - [x] Integration tests with mock server
 - [ ] UniFFI bindings for iOS/macOS Swift apps
-- [ ] Home Assistant integration
+- [ ] TUI interface (ratatui-based)
 
 ## Acknowledgments
 
