@@ -196,7 +196,7 @@ sauna power-off
 # Set temperature (10-100°C)
 sauna set-temp 85
 
-# Set mode: sauna, sanarium, or infrared
+# Set mode: sauna or sanarium
 sauna set-mode sauna
 ```
 
@@ -219,7 +219,7 @@ sauna schedule --clear
 
 ### Profiles
 
-Save and reuse sauna configurations:
+Save and reuse sauna configurations locally:
 
 ```bash
 # Create a profile
@@ -242,7 +242,7 @@ sauna profile apply hot --start
 sauna profile delete hot
 ```
 
-Profiles are stored in `~/.config/klafs/profiles.toml`.
+Profiles are stored locally in `~/.config/klafs/profiles.toml`.
 
 ### Configure Multiple Settings
 
@@ -314,7 +314,6 @@ Base URL: `https://sauna-app-19.klafs.com`
 | `/SaunaApp/ChangeHumLevel` | POST | Set humidity level |
 | `/SaunaApp/SetMode` | POST | Set operating mode |
 | `/SaunaApp/SetSelectedTime` | POST | Set scheduled start time |
-| `/SaunaApp/FavoriteSelected` | POST | Apply profile settings |
 
 ### Sauna Modes
 
@@ -322,7 +321,6 @@ Base URL: `https://sauna-app-19.klafs.com`
 |------|-------|-------------------|
 | Sauna | 1 | 10-100°C |
 | Sanarium | 2 | 40-75°C |
-| Infrared | 3 | - |
 
 ### Status Codes
 
@@ -361,6 +359,15 @@ sauna/
 - The PIN for power control is also stored securely in the keyring
 - Session cookies are managed in-memory and not persisted to disk
 - **Klafs locks accounts after 3 failed login attempts** - be careful with automated scripts
+
+## Unsupported Features
+
+The following Klafs features are **not currently supported**:
+
+- **Infrared mode** - Cannot be tested/verified without hardware access
+- **Klafs Favorites** - Server-side favorites have no list API; use local profiles instead
+- **Light control** - Main light, color light, and sunset features
+- **Bathing duration** - Session length timer (not the scheduled start time)
 
 ## Roadmap
 

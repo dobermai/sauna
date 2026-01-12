@@ -8,8 +8,8 @@ use tracing::{debug, info, instrument, warn};
 use crate::debug::{DebugConfig, HttpDebugger, Timer};
 use crate::error::{KlafsError, Result};
 use crate::models::{
-    FavoriteSelectedRequest, PowerControlRequest, SaunaInfo, SaunaMode, SaunaStatus,
-    SetHumidityRequest, SetModeRequest, SetSelectedTimeRequest, SetTemperatureRequest,
+    PowerControlRequest, SaunaInfo, SaunaMode, SaunaStatus, SetHumidityRequest, SetModeRequest,
+    SetSelectedTimeRequest, SetTemperatureRequest,
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -860,98 +860,6 @@ impl KlafsClient {
             Some((hour, minute)) => info!("Scheduled time set to {:02}:{:02}", hour, minute),
             None => info!("Scheduled time cleared"),
         }
-        Ok(())
-    }
-
-    /// Apply favorite/profile settings (temperature, humidity level, IR level)
-    ///
-    /// This uses the FavoriteSelected endpoint to apply a set of parameters
-    /// in a single API call.
-    ///
-    /// # Arguments
-    ///
-    /// * `sauna_id` - UUID of the sauna
-    /// * `temperature` - Target temperature in °C
-    /// * `humidity_level` - Humidity level (0-10, for Sanarium mode; 0 means unset/default)
-    /// * `ir_level` - Infrared level (0-10, for IR mode; 0 means unset/default)
-    #[instrument(skip(self), fields(sauna_id = %sauna_id))]
-    pub async fn apply_favorite(
-        &self,
-        sauna_id: &str,
-        temperature: i32,
-        humidity_level: i32,
-        ir_level: i32,
-    ) -> Result<()> {
-        Self::validate_sauna_id(sauna_id)?;
-
-        // Validate parameters
-        if !(10..=100).contains(&temperature) {
-            return Err(KlafsError::InvalidParameter {
-                message: format!(
-                    "Temperature must be between 10 and 100°C, got {}",
-                    temperature
-                ),
-            });
-        }
-        if !(0..=10).contains(&humidity_level) {
-            return Err(KlafsError::InvalidParameter {
-                message: format!(
-                    "Humidity level must be between 0 and 10, got {}",
-                    humidity_level
-                ),
-            });
-        }
-        if !(0..=10).contains(&ir_level) {
-            return Err(KlafsError::InvalidParameter {
-                message: format!("IR level must be between 0 and 10, got {}", ir_level),
-            });
-        }
-
-        info!(
-            "Applying favorite settings: temp={}°C, hum={}, ir={} for sauna {}",
-            temperature, humidity_level, ir_level, sauna_id
-        );
-
-        let timer = Timer::start();
-        let url = format!("{}/SaunaApp/FavoriteSelected", self.base_url);
-
-        let request = FavoriteSelectedRequest {
-            id: sauna_id.to_string(),
-            temp: temperature,
-            hum_level: humidity_level,
-            ir_level,
-        };
-
-        let body = serde_json::to_string(&request)?;
-        let request_id = self
-            .debugger
-            .log_request(
-                "POST",
-                &url,
-                &reqwest::header::HeaderMap::new(),
-                Some(&body),
-            )
-            .await;
-
-        let response = self.client.post(&url).json(&request).send().await?;
-
-        let status = response.status();
-        let headers = response.headers().clone();
-        let response_text = response.text().await?;
-
-        self.debugger
-            .log_response(
-                &request_id,
-                status.as_u16(),
-                &headers,
-                Some(&response_text),
-                timer.elapsed_ms(),
-            )
-            .await;
-
-        self.check_response_status(status, &response_text)?;
-
-        info!("Favorite settings applied successfully");
         Ok(())
     }
 

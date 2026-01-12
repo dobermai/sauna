@@ -9,7 +9,7 @@ const APP_NAME: &str = "klafs";
 /// A saved profile containing sauna settings
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Profile {
-    /// Operating mode: "sauna", "sanarium", or "infrared"
+    /// Operating mode: "sauna" or "sanarium"
     pub mode: String,
 
     /// Target temperature in °C
@@ -18,24 +18,15 @@ pub struct Profile {
     /// Humidity level (1-10, for sanarium mode)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub humidity: Option<i32>,
-
-    /// Infrared level (1-10, for infrared mode)
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub ir_level: Option<i32>,
 }
 
 impl Profile {
     /// Create a new profile
-    pub fn new(
-        mode: &str,
-        temperature: i32,
-        humidity: Option<i32>,
-        ir_level: Option<i32>,
-    ) -> Result<Self> {
+    pub fn new(mode: &str, temperature: i32, humidity: Option<i32>) -> Result<Self> {
         // Validate mode
         let mode_lower = mode.to_lowercase();
-        if !["sauna", "sanarium", "infrared"].contains(&mode_lower.as_str()) {
-            bail!("Invalid mode '{}'. Use: sauna, sanarium, or infrared", mode);
+        if !["sauna", "sanarium"].contains(&mode_lower.as_str()) {
+            bail!("Invalid mode '{}'. Use: sauna or sanarium", mode);
         }
 
         // Validate temperature based on mode
@@ -56,14 +47,6 @@ impl Profile {
                     );
                 }
             }
-            "infrared" => {
-                if !(10..=100).contains(&temperature) {
-                    bail!(
-                        "Infrared temperature must be between 10 and 100°C, got {}",
-                        temperature
-                    );
-                }
-            }
             _ => {}
         }
 
@@ -77,21 +60,10 @@ impl Profile {
             }
         }
 
-        // Validate IR level (only valid for infrared)
-        if let Some(ir) = ir_level {
-            if mode_lower != "infrared" {
-                bail!("IR level can only be set for infrared mode");
-            }
-            if !(1..=10).contains(&ir) {
-                bail!("IR level must be between 1 and 10, got {}", ir);
-            }
-        }
-
         Ok(Self {
             mode: mode_lower,
             temperature,
             humidity,
-            ir_level,
         })
     }
 
@@ -101,9 +73,6 @@ impl Profile {
 
         if let Some(hum) = self.humidity {
             parts.push(format!("humidity {}", hum));
-        }
-        if let Some(ir) = self.ir_level {
-            parts.push(format!("IR level {}", ir));
         }
 
         parts.join(", ")

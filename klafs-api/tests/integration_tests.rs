@@ -613,56 +613,6 @@ mod control_tests {
     }
 
     #[tokio::test]
-    async fn test_apply_favorite() {
-        let mock_server = MockServer::start().await;
-        let client = setup_logged_in_client(&mock_server).await;
-
-        Mock::given(method("POST"))
-            .and(path("/SaunaApp/FavoriteSelected"))
-            .and(body_string_contains("\"temp\":85"))
-            .and(body_string_contains("\"hum_level\":5"))
-            .and(body_string_contains("\"ir_level\":0"))
-            .respond_with(ResponseTemplate::new(200).set_body_string(r#"{"success": true}"#))
-            .mount(&mock_server)
-            .await;
-
-        let result = client
-            .apply_favorite("364cc9db-86f1-49d1-86cd-f6ef9b20a490", 85, 5, 0)
-            .await;
-
-        assert!(result.is_ok());
-    }
-
-    #[tokio::test]
-    async fn test_apply_favorite_invalid() {
-        let client = KlafsClient::new();
-
-        // Invalid temperature (too low)
-        let result = client
-            .apply_favorite("364cc9db-86f1-49d1-86cd-f6ef9b20a490", 5, 5, 0)
-            .await;
-        assert!(matches!(result, Err(KlafsError::InvalidParameter { .. })));
-
-        // Invalid temperature (too high)
-        let result = client
-            .apply_favorite("364cc9db-86f1-49d1-86cd-f6ef9b20a490", 150, 5, 0)
-            .await;
-        assert!(matches!(result, Err(KlafsError::InvalidParameter { .. })));
-
-        // Invalid humidity level
-        let result = client
-            .apply_favorite("364cc9db-86f1-49d1-86cd-f6ef9b20a490", 85, 15, 0)
-            .await;
-        assert!(matches!(result, Err(KlafsError::InvalidParameter { .. })));
-
-        // Invalid IR level
-        let result = client
-            .apply_favorite("364cc9db-86f1-49d1-86cd-f6ef9b20a490", 85, 5, 15)
-            .await;
-        assert!(matches!(result, Err(KlafsError::InvalidParameter { .. })));
-    }
-
-    #[tokio::test]
     async fn test_configure() {
         let mock_server = MockServer::start().await;
         let client = setup_logged_in_client(&mock_server).await;

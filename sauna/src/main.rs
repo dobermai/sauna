@@ -39,8 +39,7 @@ fn parse_mode(mode: &str) -> Result<SaunaMode> {
     match mode.to_lowercase().as_str() {
         "sauna" => Ok(SaunaMode::Sauna),
         "sanarium" => Ok(SaunaMode::Sanarium),
-        "infrared" | "ir" => Ok(SaunaMode::Infrared),
-        _ => bail!("Invalid mode '{}'. Use: sauna, sanarium, or infrared", mode),
+        _ => bail!("Invalid mode '{}'. Use: sauna or sanarium", mode),
     }
 }
 
@@ -156,7 +155,7 @@ enum Commands {
 
     /// Set the operating mode
     SetMode {
-        /// Mode: sauna, sanarium, or infrared
+        /// Mode: sauna or sanarium
         mode: String,
 
         /// Sauna ID (uses default from config if not provided)
@@ -221,7 +220,7 @@ enum ProfileCommands {
         /// Name for the profile
         name: String,
 
-        /// Operating mode: sauna, sanarium, or infrared
+        /// Operating mode: sauna or sanarium
         #[arg(short, long)]
         mode: String,
 
@@ -232,10 +231,6 @@ enum ProfileCommands {
         /// Humidity level (1-10, sanarium mode only)
         #[arg(long)]
         humidity: Option<i32>,
-
-        /// Infrared level (1-10, infrared mode only)
-        #[arg(long)]
-        ir_level: Option<i32>,
     },
 
     /// List all saved profiles
@@ -910,7 +905,6 @@ async fn cmd_profile(command: ProfileCommands, debug: bool, debug_file: &Path) -
             mode,
             temp,
             humidity,
-            ir_level,
         } => {
             let mut profiles = Profiles::load()?;
 
@@ -921,7 +915,7 @@ async fn cmd_profile(command: ProfileCommands, debug: bool, debug_file: &Path) -
                 );
             }
 
-            let profile = Profile::new(&mode, temp, humidity, ir_level)?;
+            let profile = Profile::new(&mode, temp, humidity)?;
             profiles.set(&name, profile.clone());
             profiles.save()?;
 
@@ -973,9 +967,6 @@ async fn cmd_profile(command: ProfileCommands, debug: bool, debug_file: &Path) -
                     if let Some(hum) = profile.humidity {
                         println!("  Humidity:    {}", hum.to_string().cyan());
                     }
-                    if let Some(ir) = profile.ir_level {
-                        println!("  IR Level:    {}", ir.to_string().cyan());
-                    }
                 }
                 None => {
                     bail!("Profile '{}' not found", name);
@@ -1003,15 +994,18 @@ async fn cmd_profile(command: ProfileCommands, debug: bool, debug_file: &Path) -
 
             println!("{}", format!("Applying profile '{}'...", name).dimmed());
 
+            // Set mode first
             client.set_mode(&sauna_id, sauna_mode).await?;
+
+            // Set temperature
             client
-                .apply_favorite(
-                    &sauna_id,
-                    profile.temperature,
-                    profile.humidity.unwrap_or(0),
-                    profile.ir_level.unwrap_or(0),
-                )
+                .set_temperature(&sauna_id, profile.temperature)
                 .await?;
+
+            // Set humidity if specified (only works in sanarium mode)
+            if let Some(humidity) = profile.humidity {
+                client.set_humidity(&sauna_id, humidity).await?;
+            }
 
             println!(
                 "{} Profile '{}' applied: {}",
