@@ -259,6 +259,34 @@ sauna configure --temp 85 --time 18:30
 sauna configure --temp 85 --humidity 5 --time 18:30
 ```
 
+### Light Control
+
+Control the cabin lights:
+
+```bash
+# Main light
+sauna light on
+sauna light on --brightness 8
+sauna light off
+
+# Sunset light
+sauna sunset on
+sauna sunset on --brightness 10
+sauna sunset off
+```
+
+### Bathing Duration
+
+Set the session length (how long the sauna runs once started):
+
+```bash
+# Set duration to 3 hours 30 minutes
+sauna bath-time 3:30
+
+# Clear the duration
+sauna bath-time --clear
+```
+
 ## Library Usage
 
 Add to your `Cargo.toml`:
@@ -314,6 +342,8 @@ Base URL: `https://sauna-app-19.klafs.com`
 | `/SaunaApp/ChangeHumLevel` | POST | Set humidity level |
 | `/SaunaApp/SetMode` | POST | Set operating mode |
 | `/SaunaApp/SetSelectedTime` | POST | Set scheduled start time |
+| `/SaunaApp/LightChange` | POST | Control lights (main, color, sunset) |
+| `/SaunaApp/SetBathingTime` | POST | Set session duration |
 
 ### Sauna Modes
 
@@ -365,9 +395,9 @@ sauna/
 The following Klafs features are **not currently supported**:
 
 - **Infrared mode** - Cannot be tested/verified without hardware access
+- **Color light** - Cannot be tested/verified without hardware access
+- **Light status** - API does not report accurate light state; control commands work but status is unreliable
 - **Klafs Favorites** - Server-side favorites have no list API; use local profiles instead
-- **Light control** - Main light, color light, and sunset features
-- **Bathing duration** - Session length timer (not the scheduled start time)
 
 ## Roadmap
 

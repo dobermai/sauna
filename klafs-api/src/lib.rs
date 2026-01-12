@@ -71,4 +71,4 @@ mod models;
 pub use client::{ClientConfig, KlafsClient, DEFAULT_BASE_URL};
 pub use debug::DebugConfig;
 pub use error::{KlafsError, Result};
-pub use models::{SaunaInfo, SaunaMode, SaunaStatus, StatusCode};
+pub use models::{LightType, SaunaInfo, SaunaMode, SaunaStatus, StatusCode};

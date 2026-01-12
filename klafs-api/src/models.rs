@@ -305,3 +305,39 @@ pub(crate) struct SetSelectedTimeRequest {
     pub hours: i32,
     pub minutes: i32,
 }
+
+/// Request body for LightChange endpoint
+#[derive(Debug, Serialize)]
+pub(crate) struct LightChangeRequest {
+    pub id: String,
+    pub light_id: u8,
+    pub on_off: bool,
+    pub brightness: i32,
+    pub color: i32,
+}
+
+/// Light types for the LightChange endpoint
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LightType {
+    /// Main cabin light
+    Main = 1,
+    /// Color light
+    Color = 2,
+    /// Sunset light
+    Sunset = 3,
+}
+
+impl From<LightType> for u8 {
+    fn from(light: LightType) -> Self {
+        light as u8
+    }
+}
+
+/// Request body for SetBathingTime endpoint
+#[derive(Debug, Serialize)]
+pub(crate) struct SetBathingTimeRequest {
+    pub id: String,
+    pub bathing_time_set: bool,
+    pub hours: i32,
+    pub minutes: i32,
+}

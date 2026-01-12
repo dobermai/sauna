@@ -211,6 +211,66 @@ enum Commands {
         #[arg(long)]
         time: Option<String>,
     },
+
+    /// Control the main cabin light
+    Light {
+        /// Turn light on or off
+        #[command(subcommand)]
+        command: LightCommands,
+
+        /// Sauna ID (uses default from config if not provided)
+        #[arg(short, long, global = true)]
+        sauna_id: Option<String>,
+    },
+
+    /// Control the sunset light
+    Sunset {
+        /// Turn sunset on or off
+        #[command(subcommand)]
+        command: SunsetCommands,
+
+        /// Sauna ID (uses default from config if not provided)
+        #[arg(short, long, global = true)]
+        sauna_id: Option<String>,
+    },
+
+    /// Set the bathing duration (session length)
+    BathTime {
+        /// Duration in H:MM format (e.g., 3:30 for 3 hours 30 minutes)
+        duration: Option<String>,
+
+        /// Sauna ID (uses default from config if not provided)
+        #[arg(short, long)]
+        sauna_id: Option<String>,
+
+        /// Clear the bathing time
+        #[arg(long)]
+        clear: bool,
+    },
+}
+
+#[derive(Subcommand)]
+enum LightCommands {
+    /// Turn the main light on
+    On {
+        /// Brightness level (1-10)
+        #[arg(short, long)]
+        brightness: Option<i32>,
+    },
+    /// Turn the main light off
+    Off,
+}
+
+#[derive(Subcommand)]
+enum SunsetCommands {
+    /// Turn the sunset light on
+    On {
+        /// Brightness level (1-10)
+        #[arg(short, long)]
+        brightness: Option<i32>,
+    },
+    /// Turn the sunset light off
+    Off,
 }
 
 #[derive(Subcommand)]
@@ -323,6 +383,17 @@ async fn main() -> Result<()> {
             humidity,
             time,
         } => cmd_configure(sauna_id, temp, humidity, time, cli.debug, &cli.debug_file).await,
+        Commands::Light { command, sauna_id } => {
+            cmd_light(command, sauna_id, cli.debug, &cli.debug_file).await
+        }
+        Commands::Sunset { command, sauna_id } => {
+            cmd_sunset(command, sauna_id, cli.debug, &cli.debug_file).await
+        }
+        Commands::BathTime {
+            duration,
+            sauna_id,
+            clear,
+        } => cmd_bath_time(duration, sauna_id, clear, cli.debug, &cli.debug_file).await,
     }
 }
 
@@ -894,6 +965,130 @@ async fn cmd_configure(
         "Success!".green().bold(),
         changes.join(", ")
     );
+
+    Ok(())
+}
+
+async fn cmd_light(
+    command: LightCommands,
+    sauna_id: Option<String>,
+    debug: bool,
+    debug_file: &Path,
+) -> Result<()> {
+    let config = Config::load()?;
+    let client = create_authenticated_client(&config, debug, debug_file).await?;
+    let sauna_id = resolve_sauna_id(sauna_id, &config, &client).await?;
+
+    match command {
+        LightCommands::On { brightness } => {
+            println!("{}", "Turning main light on...".dimmed());
+            client.set_light(&sauna_id, true, brightness).await?;
+            match brightness {
+                Some(b) => println!(
+                    "{} Main light on (brightness {})",
+                    "Success!".green().bold(),
+                    b.to_string().cyan()
+                ),
+                None => println!("{} Main light on", "Success!".green().bold()),
+            }
+        }
+        LightCommands::Off => {
+            println!("{}", "Turning main light off...".dimmed());
+            client.set_light(&sauna_id, false, None).await?;
+            println!("{} Main light off", "Success!".green().bold());
+        }
+    }
+
+    Ok(())
+}
+
+async fn cmd_sunset(
+    command: SunsetCommands,
+    sauna_id: Option<String>,
+    debug: bool,
+    debug_file: &Path,
+) -> Result<()> {
+    let config = Config::load()?;
+    let client = create_authenticated_client(&config, debug, debug_file).await?;
+    let sauna_id = resolve_sauna_id(sauna_id, &config, &client).await?;
+
+    match command {
+        SunsetCommands::On { brightness } => {
+            println!("{}", "Turning sunset on...".dimmed());
+            client.set_sunset(&sauna_id, true, brightness).await?;
+            match brightness {
+                Some(b) => println!(
+                    "{} Sunset on (brightness {})",
+                    "Success!".green().bold(),
+                    b.to_string().cyan()
+                ),
+                None => println!("{} Sunset on", "Success!".green().bold()),
+            }
+        }
+        SunsetCommands::Off => {
+            println!("{}", "Turning sunset off...".dimmed());
+            client.set_sunset(&sauna_id, false, None).await?;
+            println!("{} Sunset off", "Success!".green().bold());
+        }
+    }
+
+    Ok(())
+}
+
+/// Parse a duration string in H:MM format
+fn parse_duration(duration_str: &str) -> Result<(i32, i32)> {
+    let parts: Vec<&str> = duration_str.split(':').collect();
+    if parts.len() != 2 {
+        bail!(
+            "Invalid duration format '{}'. Use H:MM (e.g., 3:30)",
+            duration_str
+        );
+    }
+    let hours: i32 = parts[0]
+        .parse()
+        .with_context(|| format!("Invalid hours: {}", parts[0]))?;
+    let minutes: i32 = parts[1]
+        .parse()
+        .with_context(|| format!("Invalid minutes: {}", parts[1]))?;
+    Ok((hours, minutes))
+}
+
+async fn cmd_bath_time(
+    duration: Option<String>,
+    sauna_id: Option<String>,
+    clear: bool,
+    debug: bool,
+    debug_file: &Path,
+) -> Result<()> {
+    let config = Config::load()?;
+    let client = create_authenticated_client(&config, debug, debug_file).await?;
+    let sauna_id = resolve_sauna_id(sauna_id, &config, &client).await?;
+
+    if clear && duration.is_some() {
+        bail!("Cannot use --clear with a duration argument");
+    }
+
+    let parsed_duration = duration.map(|s| parse_duration(&s)).transpose()?;
+
+    if let Some((hours, minutes)) = parsed_duration {
+        println!(
+            "{}",
+            format!("Setting bathing time to {}:{:02}...", hours, minutes).dimmed()
+        );
+        client
+            .set_bathing_time(&sauna_id, Some((hours, minutes)))
+            .await?;
+        println!(
+            "{} Bathing time set to {}:{:02}",
+            "Success!".green().bold(),
+            hours,
+            minutes
+        );
+    } else {
+        println!("{}", "Clearing bathing time...".dimmed());
+        client.set_bathing_time(&sauna_id, None).await?;
+        println!("{} Bathing time cleared", "Success!".green().bold());
+    }
 
     Ok(())
 }
