@@ -285,16 +285,25 @@ impl HttpDebugger {
             entry.response_status = Some(status);
             entry.duration_ms = Some(duration_ms);
 
-            // Capture response headers
+            // Capture response headers (with redaction if enabled)
             for (key, value) in headers.iter() {
                 let value_str = value.to_str().unwrap_or("<binary>").to_string();
+                let value_str = if self.config.redact_sensitive {
+                    self.redact_header(key.as_str(), &value_str)
+                } else {
+                    value_str
+                };
                 entry.response_headers.push((key.to_string(), value_str));
             }
 
-            // Capture response body
+            // Capture response body (with redaction if enabled)
             if self.config.log_bodies {
                 if let Some(body) = body {
-                    entry.response_body = Some(body.to_string());
+                    entry.response_body = Some(if self.config.redact_sensitive {
+                        self.redact_body(body)
+                    } else {
+                        body.to_string()
+                    });
                 }
             }
 

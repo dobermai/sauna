@@ -919,11 +919,11 @@ async fn cmd_configure(
         format!("Configuring: {}...", changes.join(", ")).dimmed()
     );
 
-    // Note: The configure method takes both sauna and sanarium temperature
-    // For simplicity, we set both to the same value if temp is provided
-    // The API will use the appropriate one based on current mode
+    // Only pass the temperature as sauna_temperature; the API will use it based on current mode.
+    // Passing None for sanarium_temperature avoids triggering sanarium range validation (40-75°C)
+    // when the user sets higher temperatures (up to 100°C) for regular Sauna mode.
     client
-        .configure(&sauna_id, temp, temp, humidity, hour, minute)
+        .configure(&sauna_id, temp, None, humidity, hour, minute)
         .await?;
 
     println!(

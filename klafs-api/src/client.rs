@@ -773,8 +773,8 @@ impl KlafsClient {
     ///
     /// * `sauna_id` - UUID of the sauna
     /// * `temperature` - Target temperature in °C
-    /// * `humidity_level` - Humidity level (1-10, for Sanarium mode)
-    /// * `ir_level` - Infrared level (1-10, for IR mode)
+    /// * `humidity_level` - Humidity level (0-10, for Sanarium mode; 0 means unset/default)
+    /// * `ir_level` - Infrared level (0-10, for IR mode; 0 means unset/default)
     #[instrument(skip(self), fields(sauna_id = %sauna_id))]
     pub async fn apply_favorite(
         &self,
