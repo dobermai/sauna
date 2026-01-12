@@ -275,18 +275,6 @@ sauna sunset on --brightness 10
 sauna sunset off
 ```
 
-### Bathing Duration
-
-Set the session length (how long the sauna runs once started):
-
-```bash
-# Set duration to 3 hours 30 minutes
-sauna bath-time 3:30
-
-# Clear the duration
-sauna bath-time --clear
-```
-
 ## Library Usage
 
 Add to your `Cargo.toml`:
@@ -343,7 +331,7 @@ Base URL: `https://sauna-app-19.klafs.com`
 | `/SaunaApp/SetMode` | POST | Set operating mode |
 | `/SaunaApp/SetSelectedTime` | POST | Set scheduled start time |
 | `/SaunaApp/LightChange` | POST | Control lights (main, color, sunset) |
-| `/SaunaApp/SetBathingTime` | POST | Set session duration |
+| `/SaunaApp/SetBathingTime` | POST | Set session duration (**broken - see below**) |
 
 ### Sauna Modes
 
@@ -352,14 +340,14 @@ Base URL: `https://sauna-app-19.klafs.com`
 | Sauna | 1 | 10-100°C |
 | Sanarium | 2 | 40-75°C |
 
-### Status Codes
+### Operation Status Codes (opStatus)
 
 | Code | Meaning |
 |------|---------|
 | 0 | Off |
-| 1 | Heating Up |
-| 2 | Ready |
-| 3 | Standby |
+| 1 | Scheduled (waiting for start time) |
+| 2 | Heating |
+| 3 | Ready |
 
 ## Project Structure
 
@@ -394,6 +382,7 @@ sauna/
 
 The following Klafs features are **not currently supported**:
 
+- **Bathing duration (session length)** - The `SetBathingTime` API endpoint exists and accepts requests, but the sauna ignores the setting. This appears to be a server-side bug.
 - **Infrared mode** - Cannot be tested/verified without hardware access
 - **Color light** - Cannot be tested/verified without hardware access
 - **Light status** - API does not report accurate light state; control commands work but status is unreliable

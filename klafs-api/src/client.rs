@@ -9,8 +9,7 @@ use crate::debug::{DebugConfig, HttpDebugger, Timer};
 use crate::error::{KlafsError, Result};
 use crate::models::{
     LightChangeRequest, LightType, PowerControlRequest, SaunaInfo, SaunaMode, SaunaStatus,
-    SetBathingTimeRequest, SetHumidityRequest, SetModeRequest, SetSelectedTimeRequest,
-    SetTemperatureRequest,
+    SetHumidityRequest, SetModeRequest, SetSelectedTimeRequest, SetTemperatureRequest,
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -976,98 +975,9 @@ impl KlafsClient {
         Ok(())
     }
 
-    /// Set the bathing duration (session length)
-    ///
-    /// This sets how long the sauna session will run once started.
-    ///
-    /// # Arguments
-    ///
-    /// * `sauna_id` - UUID of the sauna
-    /// * `duration` - Duration as (hours, minutes), or None to clear
-    #[instrument(skip(self), fields(sauna_id = %sauna_id))]
-    pub async fn set_bathing_time(
-        &self,
-        sauna_id: &str,
-        duration: Option<(i32, i32)>,
-    ) -> Result<()> {
-        Self::validate_sauna_id(sauna_id)?;
-
-        let (time_set, hours, minutes) = match duration {
-            Some((h, m)) => {
-                // Validate hours and minutes
-                if !(0..=23).contains(&h) {
-                    return Err(KlafsError::InvalidParameter {
-                        message: format!("Hours must be between 0 and 23, got {}", h),
-                    });
-                }
-                if !(0..=59).contains(&m) {
-                    return Err(KlafsError::InvalidParameter {
-                        message: format!("Minutes must be between 0 and 59, got {}", m),
-                    });
-                }
-                if h == 0 && m == 0 {
-                    return Err(KlafsError::InvalidParameter {
-                        message: "Bathing time cannot be 0:00".to_string(),
-                    });
-                }
-                (true, h, m)
-            }
-            None => (false, 0, 0),
-        };
-
-        match duration {
-            Some((h, m)) => info!(
-                "Setting bathing time to {}:{:02} for sauna {}",
-                h, m, sauna_id
-            ),
-            None => info!("Clearing bathing time for sauna {}", sauna_id),
-        }
-
-        let timer = Timer::start();
-        let url = format!("{}/SaunaApp/SetBathingTime", self.base_url);
-
-        let request = SetBathingTimeRequest {
-            id: sauna_id.to_string(),
-            bathing_time_set: time_set,
-            hours,
-            minutes,
-        };
-
-        let body = serde_json::to_string(&request)?;
-        let request_id = self
-            .debugger
-            .log_request(
-                "POST",
-                &url,
-                &reqwest::header::HeaderMap::new(),
-                Some(&body),
-            )
-            .await;
-
-        let response = self.client.post(&url).json(&request).send().await?;
-
-        let status = response.status();
-        let headers = response.headers().clone();
-        let response_text = response.text().await?;
-
-        self.debugger
-            .log_response(
-                &request_id,
-                status.as_u16(),
-                &headers,
-                Some(&response_text),
-                timer.elapsed_ms(),
-            )
-            .await;
-
-        self.check_response_status(status, &response_text)?;
-
-        match duration {
-            Some((h, m)) => info!("Bathing time set to {}:{:02}", h, m),
-            None => info!("Bathing time cleared"),
-        }
-        Ok(())
-    }
+    // NOTE: SetBathingTime API endpoint exists but doesn't actually work.
+    // The API accepts the request and returns success, but the sauna doesn't
+    // change its bathing time. This appears to be a server-side bug.
 
     /// Configure multiple settings in a single API call
     ///

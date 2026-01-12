@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use serde_repr::{Deserialize_repr, Serialize_repr};
 
 /// Information about a registered sauna
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -85,6 +86,31 @@ impl std::fmt::Display for StatusCode {
             StatusCode::Ready => write!(f, "Ready"),
             StatusCode::Standby => write!(f, "Standby"),
             StatusCode::Unknown(code) => write!(f, "Unknown ({})", code),
+        }
+    }
+}
+
+/// Operational status of the sauna (from opStatus field)
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize_repr, Deserialize_repr)]
+#[repr(i32)]
+pub enum OpStatus {
+    /// Sauna is off
+    Off = 0,
+    /// Sauna is scheduled, waiting for start time
+    Scheduled = 1,
+    /// Sauna is heating up
+    Heating = 2,
+    /// Sauna is ready for use
+    Ready = 3,
+}
+
+impl std::fmt::Display for OpStatus {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            OpStatus::Off => write!(f, "Off"),
+            OpStatus::Scheduled => write!(f, "Scheduled"),
+            OpStatus::Heating => write!(f, "Heating"),
+            OpStatus::Ready => write!(f, "Ready"),
         }
     }
 }
@@ -180,8 +206,8 @@ pub struct SaunaStatus {
     /// Currently selected mode (1=Sauna, 2=Sanarium, etc.)
     pub selected_mode: i32,
 
-    /// Operation status
-    pub op_status: i32,
+    /// Operation status (Off, Scheduled, Active)
+    pub op_status: OpStatus,
 
     /// Light is on
     pub light_is_on: bool,
@@ -333,11 +359,3 @@ impl From<LightType> for u8 {
     }
 }
 
-/// Request body for SetBathingTime endpoint
-#[derive(Debug, Serialize)]
-pub(crate) struct SetBathingTimeRequest {
-    pub id: String,
-    pub bathing_time_set: bool,
-    pub hours: i32,
-    pub minutes: i32,
-}
