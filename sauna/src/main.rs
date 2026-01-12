@@ -2,7 +2,7 @@ use anyhow::{bail, Context, Result};
 use clap::{Parser, Subcommand};
 use colored::Colorize;
 use klafs_api::{
-    ClientConfig, DebugConfig, KlafsClient, SaunaInfo, SaunaMode, SaunaStatus, StatusCode,
+    ClientConfig, DebugConfig, KlafsClient, SaunaInfo, SaunaMode, SaunaStatus,
 };
 use std::path::{Path, PathBuf};
 
@@ -673,22 +673,23 @@ fn print_status(status: &SaunaStatus) {
     println!("  Connection:     {}", conn_status);
 
     // Combined status (power + operational state)
+    // Note: statusCode from API is unreliable (often returns 0 even when heating),
+    // so we infer the state from isPoweredOn, isReadyForUse, and temperature comparison
     let status_display = if !status.is_powered_on {
         "Off".dimmed()
     } else if status.is_ready_for_use {
         "Ready".green().bold()
+    } else if status.current_temperature < status.target_temperature() {
+        // Powered on, not ready, and below target = heating
+        format!(
+            "Heating ({}°C -> {}°C)",
+            status.current_temperature,
+            status.target_temperature()
+        )
+        .yellow()
     } else {
-        match status.status() {
-            StatusCode::HeatingUp => format!(
-                "Heating ({}°C -> {}°C)",
-                status.current_temperature,
-                status.target_temperature()
-            )
-            .yellow(),
-            StatusCode::Ready => "Ready".green().bold(),
-            StatusCode::Standby => "Standby".blue(),
-            _ => "On".green(),
-        }
+        // Powered on but at or above target temp
+        "On".green()
     };
     println!("  Status:         {}", status_display);
 
