@@ -64,6 +64,10 @@ cd sauna
 cargo install --path sauna
 ```
 
+### Platform Support
+
+This project has been developed and tested on **macOS**. It should work on **Linux** and **Windows** as well, but these platforms have not been tested yet. If you encounter any issues on these platforms, please [open an issue](https://github.com/dobermai/sauna/issues) or submit a pull request.
+
 ## CLI Usage
 
 ### Global Flags
@@ -402,6 +406,14 @@ The following Klafs features are **not currently supported**:
 - [x] Integration tests with mock server
 - [ ] UniFFI bindings for iOS/macOS Swift apps
 - [ ] TUI interface (ratatui-based)
+
+## Contributing
+
+Contributions are welcome! If you'd like to help:
+
+- **Report bugs** or **request features** by [opening an issue](https://github.com/dobermai/sauna/issues)
+- **Submit pull requests** for bug fixes or new features
+- **Test on other platforms** (Linux, Windows) and report your findings
 
 ## Acknowledgments
 
