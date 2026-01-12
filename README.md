@@ -9,6 +9,13 @@
 </p>
 
 <p align="center">
+  <a href="https://crates.io/crates/klafs-api"><img src="https://img.shields.io/crates/v/klafs-api.svg" alt="crates.io"></a>
+  <a href="https://crates.io/crates/klafs-api"><img src="https://img.shields.io/crates/d/klafs-api.svg" alt="downloads"></a>
+  <a href="https://docs.rs/klafs-api"><img src="https://docs.rs/klafs-api/badge.svg" alt="docs.rs"></a>
+  <a href="https://github.com/dobermai/sauna/actions/workflows/ci.yml"><img src="https://github.com/dobermai/sauna/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+</p>
+
+<p align="center">
   <a href="#license"><img src="https://img.shields.io/badge/license-MIT%2FApache--2.0-blue.svg" alt="License: MIT/Apache-2.0"></a>
   <a href="https://www.rust-lang.org/"><img src="https://img.shields.io/badge/rust-1.70%2B-orange.svg" alt="Rust: 1.70+"></a>
   <a href="#"><img src="https://img.shields.io/badge/platform-macOS%20%7C%20Linux%20%7C%20Windows-lightgrey.svg" alt="Platform"></a>
@@ -299,7 +306,7 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-klafs-api = { path = "klafs-api" }
+klafs-api = "0.1"
 tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
 ```
 
