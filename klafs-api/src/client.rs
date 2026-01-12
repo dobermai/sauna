@@ -376,26 +376,14 @@ impl KlafsClient {
         // Validate sauna ID format
         Self::validate_sauna_id(sauna_id)?;
 
-        // Validate PIN format (must be exactly 4 digits)
-        if pin.len() != 4 || !pin.chars().all(|c| c.is_ascii_digit()) {
-            return Err(KlafsError::InvalidParameter {
-                message: "PIN must be exactly 4 digits".to_string(),
-            });
-        }
+        // Validate PIN format
+        Self::validate_pin(pin)?;
 
         let (time_selected, sel_hour, sel_min) = match schedule {
             Some((hour, minute)) => {
                 // Validate schedule time
-                if !(0..=23).contains(&hour) {
-                    return Err(KlafsError::InvalidParameter {
-                        message: format!("Hour must be between 0 and 23, got {}", hour),
-                    });
-                }
-                if !(0..=59).contains(&minute) {
-                    return Err(KlafsError::InvalidParameter {
-                        message: format!("Minute must be between 0 and 59, got {}", minute),
-                    });
-                }
+                Self::validate_hour(hour)?;
+                Self::validate_minute(minute)?;
                 info!(
                     "Scheduling sauna {} to start at {:02}:{:02}",
                     sauna_id, hour, minute
@@ -565,16 +553,7 @@ impl KlafsClient {
     #[instrument(skip(self), fields(sauna_id = %sauna_id, temperature = %temperature))]
     pub async fn set_temperature(&self, sauna_id: &str, temperature: i32) -> Result<()> {
         Self::validate_sauna_id(sauna_id)?;
-
-        // Validate temperature range
-        if !(10..=100).contains(&temperature) {
-            return Err(KlafsError::InvalidParameter {
-                message: format!(
-                    "Temperature must be between 10 and 100°C, got {}",
-                    temperature
-                ),
-            });
-        }
+        Self::validate_temperature(temperature)?;
 
         info!(
             "Setting temperature to {}°C for sauna {}",
@@ -620,11 +599,13 @@ impl KlafsClient {
     #[instrument(skip(self), fields(sauna_id = %sauna_id, level = %level))]
     pub async fn set_humidity(&self, sauna_id: &str, level: i32) -> Result<()> {
         Self::validate_sauna_id(sauna_id)?;
+        Self::validate_humidity_level(level)?;
 
-        // Validate humidity level
-        if !(1..=10).contains(&level) {
+        // Check that sauna is in Sanarium mode (humidity only works in Sanarium)
+        let status = self.get_status(sauna_id).await?;
+        if !status.sanarium_selected {
             return Err(KlafsError::InvalidParameter {
-                message: format!("Humidity level must be between 1 and 10, got {}", level),
+                message: "Humidity can only be set in Sanarium mode. Use 'set-mode sanarium' first.".to_string(),
             });
         }
 
@@ -673,18 +654,8 @@ impl KlafsClient {
     #[instrument(skip(self), fields(sauna_id = %sauna_id, hour = %hour, minute = %minute))]
     pub async fn set_start_time(&self, sauna_id: &str, hour: i32, minute: i32) -> Result<()> {
         Self::validate_sauna_id(sauna_id)?;
-
-        // Validate time
-        if !(0..=23).contains(&hour) {
-            return Err(KlafsError::InvalidParameter {
-                message: format!("Hour must be between 0 and 23, got {}", hour),
-            });
-        }
-        if !(0..=59).contains(&minute) {
-            return Err(KlafsError::InvalidParameter {
-                message: format!("Minute must be between 0 and 59, got {}", minute),
-            });
-        }
+        Self::validate_hour(hour)?;
+        Self::validate_minute(minute)?;
 
         info!(
             "Setting start time to {:02}:{:02} for sauna {}",
@@ -744,17 +715,8 @@ impl KlafsClient {
 
         let (time_set, hours, minutes) = match time {
             Some((hour, minute)) => {
-                // Validate time
-                if !(0..=23).contains(&hour) {
-                    return Err(KlafsError::InvalidParameter {
-                        message: format!("Hour must be between 0 and 23, got {}", hour),
-                    });
-                }
-                if !(0..=59).contains(&minute) {
-                    return Err(KlafsError::InvalidParameter {
-                        message: format!("Minute must be between 0 and 59, got {}", minute),
-                    });
-                }
+                Self::validate_hour(hour)?;
+                Self::validate_minute(minute)?;
                 info!(
                     "Setting scheduled time to {:02}:{:02} for sauna {}",
                     hour, minute, sauna_id
@@ -910,45 +872,19 @@ impl KlafsClient {
 
         // Validate parameters if provided
         if let Some(temp) = sauna_temperature {
-            if !(10..=100).contains(&temp) {
-                return Err(KlafsError::InvalidParameter {
-                    message: format!(
-                        "Sauna temperature must be between 10 and 100°C, got {}",
-                        temp
-                    ),
-                });
-            }
+            Self::validate_temperature(temp)?;
         }
         if let Some(temp) = sanarium_temperature {
-            if !(40..=75).contains(&temp) {
-                return Err(KlafsError::InvalidParameter {
-                    message: format!(
-                        "Sanarium temperature must be between 40 and 75°C, got {}",
-                        temp
-                    ),
-                });
-            }
+            Self::validate_sanarium_temperature(temp)?;
         }
         if let Some(level) = humidity_level {
-            if !(1..=10).contains(&level) {
-                return Err(KlafsError::InvalidParameter {
-                    message: format!("Humidity level must be between 1 and 10, got {}", level),
-                });
-            }
+            Self::validate_humidity_level(level)?;
         }
         if let Some(h) = hour {
-            if !(0..=23).contains(&h) {
-                return Err(KlafsError::InvalidParameter {
-                    message: format!("Hour must be between 0 and 23, got {}", h),
-                });
-            }
+            Self::validate_hour(h)?;
         }
         if let Some(m) = minute {
-            if !(0..=59).contains(&m) {
-                return Err(KlafsError::InvalidParameter {
-                    message: format!("Minute must be between 0 and 59, got {}", m),
-                });
-            }
+            Self::validate_minute(m)?;
         }
 
         // Build info message
@@ -1158,6 +1094,72 @@ impl KlafsClient {
         Ok(())
     }
 
+    /// Validate PIN format (must be exactly 4 digits)
+    fn validate_pin(pin: &str) -> Result<()> {
+        if pin.len() != 4 || !pin.chars().all(|c| c.is_ascii_digit()) {
+            return Err(KlafsError::InvalidParameter {
+                message: "PIN must be exactly 4 digits".to_string(),
+            });
+        }
+        Ok(())
+    }
+
+    /// Validate temperature for sauna mode (10-100°C)
+    fn validate_temperature(temperature: i32) -> Result<()> {
+        if !(10..=100).contains(&temperature) {
+            return Err(KlafsError::InvalidParameter {
+                message: format!(
+                    "Temperature must be between 10 and 100°C, got {}",
+                    temperature
+                ),
+            });
+        }
+        Ok(())
+    }
+
+    /// Validate temperature for sanarium mode (40-75°C)
+    fn validate_sanarium_temperature(temperature: i32) -> Result<()> {
+        if !(40..=75).contains(&temperature) {
+            return Err(KlafsError::InvalidParameter {
+                message: format!(
+                    "Sanarium temperature must be between 40 and 75°C, got {}",
+                    temperature
+                ),
+            });
+        }
+        Ok(())
+    }
+
+    /// Validate humidity level (1-10)
+    fn validate_humidity_level(level: i32) -> Result<()> {
+        if !(1..=10).contains(&level) {
+            return Err(KlafsError::InvalidParameter {
+                message: format!("Humidity level must be between 1 and 10, got {}", level),
+            });
+        }
+        Ok(())
+    }
+
+    /// Validate hour (0-23)
+    fn validate_hour(hour: i32) -> Result<()> {
+        if !(0..=23).contains(&hour) {
+            return Err(KlafsError::InvalidParameter {
+                message: format!("Hour must be between 0 and 23, got {}", hour),
+            });
+        }
+        Ok(())
+    }
+
+    /// Validate minute (0-59)
+    fn validate_minute(minute: i32) -> Result<()> {
+        if !(0..=59).contains(&minute) {
+            return Err(KlafsError::InvalidParameter {
+                message: format!("Minute must be between 0 and 59, got {}", minute),
+            });
+        }
+        Ok(())
+    }
+
     fn extract_guid(text: &str) -> Option<String> {
         let guid_pattern = regex_lite::Regex::new(
             r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}",
@@ -1286,5 +1288,118 @@ mod tests {
         assert_eq!(saunas.len(), 1);
         assert_eq!(saunas[0].id, "364cc9db-86f1-49d1-86cd-f6ef9b20a490");
         assert_eq!(saunas[0].name, "My Sauna");
+    }
+
+    // ===== Validation Unit Tests =====
+
+    #[test]
+    fn test_validate_sauna_id_valid() {
+        assert!(KlafsClient::validate_sauna_id("364cc9db-86f1-49d1-86cd-f6ef9b20a490").is_ok());
+        assert!(KlafsClient::validate_sauna_id("00000000-0000-0000-0000-000000000000").is_ok());
+        assert!(KlafsClient::validate_sauna_id("AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE").is_ok());
+    }
+
+    #[test]
+    fn test_validate_sauna_id_invalid() {
+        assert!(KlafsClient::validate_sauna_id("").is_err());
+        assert!(KlafsClient::validate_sauna_id("not-a-uuid").is_err());
+        assert!(KlafsClient::validate_sauna_id("364cc9db-86f1-49d1").is_err());
+        assert!(KlafsClient::validate_sauna_id("364cc9db-86f1-49d1-86cd-f6ef9b20a490-extra").is_err());
+    }
+
+    #[test]
+    fn test_validate_pin_valid() {
+        assert!(KlafsClient::validate_pin("1234").is_ok());
+        assert!(KlafsClient::validate_pin("0000").is_ok());
+        assert!(KlafsClient::validate_pin("9999").is_ok());
+    }
+
+    #[test]
+    fn test_validate_pin_invalid() {
+        // Too short
+        assert!(KlafsClient::validate_pin("123").is_err());
+        // Too long
+        assert!(KlafsClient::validate_pin("12345").is_err());
+        // Non-numeric
+        assert!(KlafsClient::validate_pin("abcd").is_err());
+        assert!(KlafsClient::validate_pin("12a4").is_err());
+        // Empty
+        assert!(KlafsClient::validate_pin("").is_err());
+        // Special characters
+        assert!(KlafsClient::validate_pin("12-4").is_err());
+    }
+
+    #[test]
+    fn test_validate_temperature_valid() {
+        assert!(KlafsClient::validate_temperature(10).is_ok());
+        assert!(KlafsClient::validate_temperature(50).is_ok());
+        assert!(KlafsClient::validate_temperature(100).is_ok());
+    }
+
+    #[test]
+    fn test_validate_temperature_invalid() {
+        assert!(KlafsClient::validate_temperature(9).is_err());
+        assert!(KlafsClient::validate_temperature(101).is_err());
+        assert!(KlafsClient::validate_temperature(0).is_err());
+        assert!(KlafsClient::validate_temperature(-10).is_err());
+        assert!(KlafsClient::validate_temperature(150).is_err());
+    }
+
+    #[test]
+    fn test_validate_sanarium_temperature_valid() {
+        assert!(KlafsClient::validate_sanarium_temperature(40).is_ok());
+        assert!(KlafsClient::validate_sanarium_temperature(60).is_ok());
+        assert!(KlafsClient::validate_sanarium_temperature(75).is_ok());
+    }
+
+    #[test]
+    fn test_validate_sanarium_temperature_invalid() {
+        assert!(KlafsClient::validate_sanarium_temperature(39).is_err());
+        assert!(KlafsClient::validate_sanarium_temperature(76).is_err());
+        assert!(KlafsClient::validate_sanarium_temperature(10).is_err());
+        assert!(KlafsClient::validate_sanarium_temperature(100).is_err());
+    }
+
+    #[test]
+    fn test_validate_humidity_level_valid() {
+        assert!(KlafsClient::validate_humidity_level(1).is_ok());
+        assert!(KlafsClient::validate_humidity_level(5).is_ok());
+        assert!(KlafsClient::validate_humidity_level(10).is_ok());
+    }
+
+    #[test]
+    fn test_validate_humidity_level_invalid() {
+        assert!(KlafsClient::validate_humidity_level(0).is_err());
+        assert!(KlafsClient::validate_humidity_level(11).is_err());
+        assert!(KlafsClient::validate_humidity_level(-1).is_err());
+        assert!(KlafsClient::validate_humidity_level(100).is_err());
+    }
+
+    #[test]
+    fn test_validate_hour_valid() {
+        assert!(KlafsClient::validate_hour(0).is_ok());
+        assert!(KlafsClient::validate_hour(12).is_ok());
+        assert!(KlafsClient::validate_hour(23).is_ok());
+    }
+
+    #[test]
+    fn test_validate_hour_invalid() {
+        assert!(KlafsClient::validate_hour(-1).is_err());
+        assert!(KlafsClient::validate_hour(24).is_err());
+        assert!(KlafsClient::validate_hour(100).is_err());
+    }
+
+    #[test]
+    fn test_validate_minute_valid() {
+        assert!(KlafsClient::validate_minute(0).is_ok());
+        assert!(KlafsClient::validate_minute(30).is_ok());
+        assert!(KlafsClient::validate_minute(59).is_ok());
+    }
+
+    #[test]
+    fn test_validate_minute_invalid() {
+        assert!(KlafsClient::validate_minute(-1).is_err());
+        assert!(KlafsClient::validate_minute(60).is_err());
+        assert!(KlafsClient::validate_minute(100).is_err());
     }
 }

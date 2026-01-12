@@ -432,6 +432,13 @@ mod control_tests {
         let mock_server = MockServer::start().await;
         let client = setup_logged_in_client(&mock_server).await;
 
+        // Mock status check (must be in Sanarium mode)
+        Mock::given(method("GET"))
+            .and(path("/SaunaApp/GetData"))
+            .respond_with(ResponseTemplate::new(200).set_body_string(fixture("sauna_status.json")))
+            .mount(&mock_server)
+            .await;
+
         Mock::given(method("POST"))
             .and(path("/SaunaApp/ChangeHumLevel"))
             .respond_with(ResponseTemplate::new(200).set_body_string(r#"{"success": true}"#))
@@ -443,6 +450,28 @@ mod control_tests {
             .await;
 
         assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_set_humidity_not_in_sanarium_mode() {
+        let mock_server = MockServer::start().await;
+        let client = setup_logged_in_client(&mock_server).await;
+
+        // Mock status check returning Sauna mode (not Sanarium)
+        Mock::given(method("GET"))
+            .and(path("/SaunaApp/GetData"))
+            .respond_with(ResponseTemplate::new(200).set_body_string(fixture("sauna_status_sauna_mode.json")))
+            .mount(&mock_server)
+            .await;
+
+        let result = client
+            .set_humidity("364cc9db-86f1-49d1-86cd-f6ef9b20a490", 7)
+            .await;
+
+        assert!(matches!(result, Err(KlafsError::InvalidParameter { .. })));
+        if let Err(KlafsError::InvalidParameter { message }) = result {
+            assert!(message.contains("Sanarium mode"));
+        }
     }
 
     #[tokio::test]
