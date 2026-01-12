@@ -31,7 +31,7 @@ This project provides:
 # Login to your Klafs account (use your USERNAME, not email!)
 sauna login
 
-# Find your sauna ID and set it as default
+# Find your sauna ID and set it as default (auto-selects if only one sauna)
 sauna saunas
 sauna config --sauna-id "your-sauna-uuid" --pin "1234"
 
@@ -76,10 +76,10 @@ This project has been developed and tested on **macOS**. It should work on **Lin
 # Enable verbose logging
 sauna --verbose <command>
 
-# Enable HTTP debug output (shows all requests/responses)
+# Enable HTTP debug logging (writes to file)
 sauna --debug <command>
 
-# Save debug output to a file
+# Save debug output to a file (used with --debug)
 sauna --debug-file debug.log <command>
 ```
 
@@ -90,6 +90,9 @@ Authenticate with your Klafs account. Credentials are stored securely in your sy
 ```bash
 sauna login
 # Username and password will be prompted securely
+
+# Provide credentials via flags
+sauna login --username your_username --password your_password
 ```
 
 > **Important**: Use your KLAFS **username**, not your email address. This is the same username you use on the KLAFS web portal.
@@ -132,6 +135,11 @@ sauna config --sauna-id "your-sauna-uuid"
 
 # Store PIN for power control (stored in system keyring)
 sauna config --pin "1234"
+
+# Auto-select is enabled by default and will pick the sauna automatically
+# when exactly one sauna is registered.
+# Disable auto-select behavior
+sauna config --auto-select false
 
 # View current configuration
 sauna config --show
@@ -184,11 +192,14 @@ Sauna Status
 ### Power Control
 
 ```bash
-# Power on immediately (requires PIN)
+# Power on immediately (requires PIN; uses stored PIN if not provided)
 sauna power-on
 
 # Schedule power on for a specific time
 sauna power-on --at 18:30
+
+# Provide PIN explicitly
+sauna power-on --pin 1234
 
 # Power off
 sauna power-off
@@ -197,7 +208,7 @@ sauna power-off
 ### Temperature and Mode
 
 ```bash
-# Set temperature (10-100°C)
+# Set temperature (10-100°C for Sauna, 40-75°C for Sanarium)
 sauna set-temp 85
 
 # Set mode: sauna or sanarium
@@ -207,7 +218,7 @@ sauna set-mode sauna
 ### Humidity Control
 
 ```bash
-# Set humidity level (0-10, for Sanarium mode; 0 = default/off)
+# Set humidity level (1-10, Sanarium mode only)
 sauna set-humidity 7
 ```
 
@@ -219,6 +230,9 @@ sauna schedule 18:30
 
 # Clear the schedule
 sauna schedule --clear
+
+# You can also clear by omitting the time
+sauna schedule
 ```
 
 ### Profiles
@@ -253,7 +267,7 @@ Profiles are stored locally in `~/.config/klafs/profiles.toml`.
 Set multiple parameters in one command:
 
 ```bash
-# Set temperature and humidity
+# Set temperature and humidity (current mode)
 sauna configure --temp 85 --humidity 5
 
 # Set temperature and schedule
