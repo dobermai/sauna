@@ -63,6 +63,16 @@ sauna power-off
 
 ## Installation
 
+### Homebrew (macOS)
+
+```bash
+brew install dobermai/tap/sauna
+```
+
+### Download Binary
+
+Pre-built binaries are available for Linux, macOS, and Windows on the [Releases](https://github.com/dobermai/sauna/releases) page.
+
 ### From Source
 
 ```bash
