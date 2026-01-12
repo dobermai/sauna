@@ -13,8 +13,8 @@ repository = "https://github.com/dobermai/sauna"
 # Async runtime
 tokio = { version = "1", features = ["full"] }
 
-# HTTP client
-reqwest = { version = "0.12", features = ["json", "cookies"] }
+# HTTP client (rustls for cross-platform builds without OpenSSL)
+reqwest = { version = "0.12", default-features = false, features = ["json", "cookies", "rustls-tls"] }
 
 # Serialization
 serde = { version = "1", features = ["derive"] }
