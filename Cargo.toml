@@ -27,8 +27,8 @@ anyhow = "1"
 # CLI
 clap = { version = "4", features = ["derive"] }
 
-# Credentials storage
-keyring = "3"
+# Credentials storage (apple-native for macOS keychain, linux-native for Linux secret service)
+keyring = { version = "3", features = ["apple-native", "linux-native"] }
 
 # Output formatting
 colored = "2"

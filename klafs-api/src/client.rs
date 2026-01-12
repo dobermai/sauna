@@ -8,7 +8,7 @@ use tracing::{debug, info, instrument, warn};
 use crate::debug::{DebugConfig, HttpDebugger, Timer};
 use crate::error::{KlafsError, Result};
 use crate::models::{
-    ConfigChangeRequest, FavoriteSelectedRequest, PowerControlRequest, SaunaInfo, SaunaMode,
+    FavoriteSelectedRequest, PowerControlRequest, SaunaInfo, SaunaMode,
     SaunaStatus, SetHumidityRequest, SetModeRequest, SetSelectedTimeRequest, SetTemperatureRequest,
 };
 
@@ -103,9 +103,17 @@ impl KlafsClient {
     pub fn with_config(config: ClientConfig) -> Self {
         let cookie_jar = Arc::new(Jar::default());
 
+        // Build default headers - X-Requested-With is required for ASP.NET AJAX requests
+        let mut default_headers = reqwest::header::HeaderMap::new();
+        default_headers.insert(
+            "X-Requested-With",
+            reqwest::header::HeaderValue::from_static("XMLHttpRequest"),
+        );
+
         let client = Client::builder()
             .cookie_provider(cookie_jar.clone())
             .user_agent(USER_AGENT)
+            .default_headers(default_headers)
             .timeout(std::time::Duration::from_secs(config.timeout_secs))
             .build()
             .expect("Failed to build HTTP client");
@@ -182,19 +190,31 @@ impl KlafsClient {
             });
         }
 
-        // Extract the verification token from the login form
-        let token = self.extract_verification_token(&login_page_html)?;
-        debug!("Extracted verification token");
+        // Extract the verification token from the login form (optional - KLAFS may not require it)
+        let token = self.extract_verification_token(&login_page_html).ok();
+        if token.is_some() {
+            debug!("Extracted verification token");
+        } else {
+            debug!("No verification token found in login form (may not be required)");
+        }
 
         // Submit the login form
         let login_url = format!("{}/Account/Login", self.base_url);
 
-        let form_body = format!(
-            "UserName={}&Password={}&__RequestVerificationToken={}",
-            urlencoding::encode(username),
-            urlencoding::encode(password),
-            urlencoding::encode(&token)
-        );
+        // Build form data - only include token if present
+        let form_body = match &token {
+            Some(t) => format!(
+                "UserName={}&Password={}&RememberMe=false&__RequestVerificationToken={}",
+                urlencoding::encode(username),
+                urlencoding::encode(password),
+                urlencoding::encode(t)
+            ),
+            None => format!(
+                "UserName={}&Password={}&RememberMe=false",
+                urlencoding::encode(username),
+                urlencoding::encode(password)
+            ),
+        };
 
         let timer = Timer::start();
         let request_id = self
@@ -202,18 +222,32 @@ impl KlafsClient {
             .log_request("POST", &login_url, &reqwest::header::HeaderMap::new(), Some(&form_body))
             .await;
 
-        let form_data = [
-            ("UserName", username),
-            ("Password", password),
-            ("__RequestVerificationToken", &token),
-        ];
-
-        let response = self
-            .client
-            .post(&login_url)
-            .form(&form_data)
-            .send()
-            .await?;
+        // Build the actual form submission
+        let response = match &token {
+            Some(t) => {
+                self.client
+                    .post(&login_url)
+                    .form(&[
+                        ("UserName", username),
+                        ("Password", password),
+                        ("RememberMe", "false"),
+                        ("__RequestVerificationToken", t.as_str()),
+                    ])
+                    .send()
+                    .await?
+            }
+            None => {
+                self.client
+                    .post(&login_url)
+                    .form(&[
+                        ("UserName", username),
+                        ("Password", password),
+                        ("RememberMe", "false"),
+                    ])
+                    .send()
+                    .await?
+            }
+        };
 
         let status = response.status();
         let headers = response.headers().clone();
@@ -388,11 +422,14 @@ impl KlafsClient {
                     "Scheduling sauna {} to start at {:02}:{:02}",
                     sauna_id, hour, minute
                 );
-                (true, Some(hour), Some(minute))
+                // First set the scheduled time via SetSelectedTime endpoint
+                self.set_selected_time(sauna_id, Some((hour, minute))).await?;
+                (true, hour, minute)
             }
             None => {
                 info!("Powering on sauna {} immediately", sauna_id);
-                (false, None, None)
+                // API requires all fields - use 0 for immediate start
+                (false, 0, 0)
             }
         };
 
@@ -439,6 +476,20 @@ impl KlafsClient {
                 status_code: status.as_u16(),
                 message: response_text,
             });
+        }
+
+        // Check for API-level errors in JSON response (Success: false)
+        if let Ok(json) = serde_json::from_str::<serde_json::Value>(&response_text) {
+            if json.get("Success").and_then(|v| v.as_bool()) == Some(false) {
+                let error_msg = json
+                    .get("ErrorMessage")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("Unknown error");
+                return Err(KlafsError::ApiError {
+                    status_code: status.as_u16(),
+                    message: error_msg.to_string(),
+                });
+            }
         }
 
         match schedule {
@@ -653,47 +704,7 @@ impl KlafsClient {
     /// * `minute` - Start minute (0-59)
     #[instrument(skip(self), fields(sauna_id = %sauna_id, hour = %hour, minute = %minute))]
     pub async fn set_start_time(&self, sauna_id: &str, hour: i32, minute: i32) -> Result<()> {
-        Self::validate_sauna_id(sauna_id)?;
-        Self::validate_hour(hour)?;
-        Self::validate_minute(minute)?;
-
-        info!(
-            "Setting start time to {:02}:{:02} for sauna {}",
-            hour, minute, sauna_id
-        );
-        let timer = Timer::start();
-
-        let url = format!("{}/SaunaApp/PostConfigChange", self.base_url);
-
-        let request = ConfigChangeRequest {
-            sauna_id: sauna_id.to_string(),
-            selected_sauna_temperature: None,
-            selected_sanarium_temperature: None,
-            selected_hum_level: None,
-            selected_hour: Some(hour),
-            selected_minute: Some(minute),
-        };
-
-        let body = serde_json::to_string(&request)?;
-        let request_id = self
-            .debugger
-            .log_request("POST", &url, &reqwest::header::HeaderMap::new(), Some(&body))
-            .await;
-
-        let response = self.client.post(&url).json(&request).send().await?;
-
-        let status = response.status();
-        let headers = response.headers().clone();
-        let response_text = response.text().await?;
-
-        self.debugger
-            .log_response(&request_id, status.as_u16(), &headers, Some(&response_text), timer.elapsed_ms())
-            .await;
-
-        self.check_response_status(status, &response_text)?;
-
-        info!("Start time set to {:02}:{:02}", hour, minute);
-        Ok(())
+        self.set_selected_time(sauna_id, Some((hour, minute))).await
     }
 
     /// Set or clear the scheduled start time without starting the sauna
@@ -914,35 +925,23 @@ impl KlafsClient {
 
         info!("Configuring sauna {}: {}", sauna_id, changes.join(", "));
 
-        let timer = Timer::start();
-        let url = format!("{}/SaunaApp/PostConfigChange", self.base_url);
+        // Apply changes using individual endpoints
+        // Temperature change
+        if let Some(temp) = sauna_temperature {
+            self.set_temperature(sauna_id, temp).await?;
+        }
 
-        let request = ConfigChangeRequest {
-            sauna_id: sauna_id.to_string(),
-            selected_sauna_temperature: sauna_temperature,
-            selected_sanarium_temperature: sanarium_temperature,
-            selected_hum_level: humidity_level,
-            selected_hour: hour,
-            selected_minute: minute,
-        };
+        // Humidity change (only works in Sanarium mode - set_humidity checks this)
+        if let Some(level) = humidity_level {
+            self.set_humidity(sauna_id, level).await?;
+        }
 
-        let body = serde_json::to_string(&request)?;
-        let request_id = self
-            .debugger
-            .log_request("POST", &url, &reqwest::header::HeaderMap::new(), Some(&body))
-            .await;
-
-        let response = self.client.post(&url).json(&request).send().await?;
-
-        let status = response.status();
-        let headers = response.headers().clone();
-        let response_text = response.text().await?;
-
-        self.debugger
-            .log_response(&request_id, status.as_u16(), &headers, Some(&response_text), timer.elapsed_ms())
-            .await;
-
-        self.check_response_status(status, &response_text)?;
+        // Time change
+        if hour.is_some() || minute.is_some() {
+            let h = hour.unwrap_or(0);
+            let m = minute.unwrap_or(0);
+            self.set_selected_time(sauna_id, Some((h, m))).await?;
+        }
 
         info!("Configuration applied successfully");
         Ok(())
@@ -1174,20 +1173,49 @@ impl KlafsClient {
     fn extract_verification_token(&self, html: &str) -> Result<String> {
         let document = Html::parse_document(html);
 
-        let input_selector =
-            Selector::parse("input[name='__RequestVerificationToken']").unwrap();
-
-        if let Some(element) = document.select(&input_selector).next() {
-            if let Some(value) = element.value().attr("value") {
-                return Ok(value.to_string());
+        let input_selector = Selector::parse("input").unwrap();
+        for element in document.select(&input_selector) {
+            let name_or_id = element
+                .value()
+                .attr("name")
+                .or_else(|| element.value().attr("id"));
+            if let Some(name) = name_or_id {
+                if name.to_lowercase().contains("requestverificationtoken") {
+                    if let Some(value) = element.value().attr("value") {
+                        return Ok(value.to_string());
+                    }
+                }
             }
         }
 
-        let meta_selector = Selector::parse("meta[name='__RequestVerificationToken']").unwrap();
+        let meta_selector = Selector::parse("meta").unwrap();
+        for element in document.select(&meta_selector) {
+            let name_or_id = element
+                .value()
+                .attr("name")
+                .or_else(|| element.value().attr("id"));
+            if let Some(name) = name_or_id {
+                if name.to_lowercase().contains("requestverificationtoken") {
+                    if let Some(value) = element.value().attr("content") {
+                        return Ok(value.to_string());
+                    }
+                }
+            }
+        }
 
-        if let Some(element) = document.select(&meta_selector).next() {
-            if let Some(value) = element.value().attr("content") {
-                return Ok(value.to_string());
+        let patterns = [
+            r#"(?i)name=["']__requestverificationtoken["'][^>]*value=["']([^"']+)["']"#,
+            r#"(?i)content=["']([^"']+)["'][^>]*name=["']__requestverificationtoken["']"#,
+            r#"(?i)__requestverificationtoken["']\s*[:=]\s*["']([^"']+)["']"#,
+        ];
+
+        for pattern in patterns {
+            if let Ok(regex) = regex_lite::Regex::new(pattern) {
+                if let Some(captures) = regex.captures(html) {
+                    if let Some(value) = captures.get(1) {
+                        return Ok(value.as_str().to_string());
+                    }
+                }
             }
         }
 
@@ -1238,6 +1266,38 @@ mod tests {
 
         let result = client.extract_verification_token(html);
         assert!(matches!(result, Err(KlafsError::VerificationTokenNotFound)));
+    }
+
+    #[test]
+    fn test_extract_verification_token_from_script() {
+        let client = KlafsClient::new();
+        let html = r#"
+            <html>
+                <head>
+                    <script>
+                        window.config = {"__RequestVerificationToken":"script-token-456"};
+                    </script>
+                </head>
+            </html>
+        "#;
+
+        let token = client.extract_verification_token(html).unwrap();
+        assert_eq!(token, "script-token-456");
+    }
+
+    #[test]
+    fn test_extract_verification_token_from_id() {
+        let client = KlafsClient::new();
+        let html = r#"
+            <html>
+                <body>
+                    <input id="__RequestVerificationToken" type="hidden" value="id-token-789" />
+                </body>
+            </html>
+        "#;
+
+        let token = client.extract_verification_token(html).unwrap();
+        assert_eq!(token, "id-token-789");
     }
 
     #[test]

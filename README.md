@@ -28,8 +28,8 @@ This project provides:
 ## Quick Start
 
 ```bash
-# Login to your Klafs account
-sauna login -u your@email.com
+# Login to your Klafs account (use your USERNAME, not email!)
+sauna login
 
 # Find your sauna ID and set it as default
 sauna saunas
@@ -51,6 +51,8 @@ sauna set-mode sanarium
 # Turn off
 sauna power-off
 ```
+
+> **Important**: Use your KLAFS **username**, not your email address, when logging in. This is the same username you use on the KLAFS web portal.
 
 ## Installation
 
@@ -82,9 +84,11 @@ sauna --debug-file debug.log <command>
 Authenticate with your Klafs account. Credentials are stored securely in your system keyring.
 
 ```bash
-sauna login -u your@email.com
-# Password will be prompted securely
+sauna login
+# Username and password will be prompted securely
 ```
+
+> **Important**: Use your KLAFS **username**, not your email address. This is the same username you use on the KLAFS web portal.
 
 > **Warning**: Klafs locks accounts after 3 failed login attempts!
 
@@ -148,14 +152,29 @@ Example output:
 Sauna Status
 
   Connection:     Connected
-  Power:          Off
-  Status:         Standby
+  Status:         Off
 
   Mode:           Sanarium
-  Current Temp:   18°C
+  Current Temp:   N/A
   Target Temp:    70°C
-  Current Humid:  0%
-  Target Humid:   Level 7
+
+  Scheduled:      Not scheduled
+```
+
+When the sauna is heating:
+
+```
+Sauna Status
+
+  Connection:     Connected
+  Status:         Heating (45°C -> 85°C)
+
+  Mode:           Sauna
+  Current Temp:   45°C
+  Target Temp:    85°C
+
+  Remaining Time: 1h 30m
+  Scheduled:      Not scheduled
 ```
 
 ### Power Control
@@ -184,7 +203,7 @@ sauna set-mode sauna
 ### Humidity Control
 
 ```bash
-# Set humidity level (1-10, for Sanarium mode)
+# Set humidity level (0-10, for Sanarium mode; 0 = default/off)
 sauna set-humidity 7
 ```
 
@@ -259,8 +278,8 @@ use klafs_api::KlafsClient;
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let client = KlafsClient::new();
 
-    // Login
-    client.login("user@example.com", "password").await?;
+    // Login (use your KLAFS username, not email!)
+    client.login("your_username", "password").await?;
 
     // Get sauna status
     let status = client.get_status("your-sauna-uuid").await?;
@@ -296,7 +315,6 @@ Base URL: `https://sauna-app-19.klafs.com`
 | `/SaunaApp/SetMode` | POST | Set operating mode |
 | `/SaunaApp/SetSelectedTime` | POST | Set scheduled start time |
 | `/SaunaApp/FavoriteSelected` | POST | Apply profile settings |
-| `/SaunaApp/PostConfigChange` | POST | Configure multiple settings |
 
 ### Sauna Modes
 

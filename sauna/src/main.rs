@@ -35,7 +35,7 @@ struct Cli {
 enum Commands {
     /// Login to your Klafs account and store credentials
     Login {
-        /// Email address for your Klafs account
+        /// Username for your Klafs account
         #[arg(short, long)]
         username: Option<String>,
 
@@ -307,7 +307,7 @@ async fn cmd_login(
     let username = match username {
         Some(u) => u,
         None => {
-            print!("Email: ");
+            print!("Username: ");
             std::io::Write::flush(&mut std::io::stdout())?;
             let mut input = String::new();
             std::io::stdin().read_line(&mut input)?;
@@ -435,7 +435,7 @@ fn print_saunas(saunas: &[SaunaInfo], config: &Config) {
 
     println!(
         "{}",
-        "Use 'klafs config --sauna-id <ID>' to set a default.".dimmed()
+        "Use 'sauna config --sauna-id <ID>' to set a default.".dimmed()
     );
 }
 
@@ -521,7 +521,7 @@ async fn cmd_status(
 
     let sauna_id = sauna_id
         .or(config.sauna_id)
-        .context("No sauna ID provided. Use --sauna-id or set a default with 'klafs config --sauna-id <ID>'")?;
+        .context("No sauna ID provided. Use --sauna-id or set a default with 'sauna config --sauna-id <ID>'")?;
 
     let status = client.get_status(&sauna_id).await?;
 
@@ -546,27 +546,24 @@ fn print_status(status: &SaunaStatus) {
     };
     println!("  Connection:     {}", conn_status);
 
-    // Power status
-    let power_status = if status.is_powered_on {
-        "On".green().bold()
-    } else {
+    // Combined status (power + operational state)
+    let status_display = if !status.is_powered_on {
         "Off".dimmed()
-    };
-    println!("  Power:          {}", power_status);
-
-    // Status
-    let status_display = match status.status() {
-        StatusCode::Off => "Off".dimmed(),
-        StatusCode::HeatingUp => "Heating Up".yellow(),
-        StatusCode::Ready => "Ready".green().bold(),
-        StatusCode::Standby => "Standby".blue(),
-        StatusCode::Unknown(code) => format!("Unknown ({})", code).red().normal(),
+    } else if status.is_ready_for_use {
+        "Ready".green().bold()
+    } else {
+        match status.status() {
+            StatusCode::HeatingUp => format!(
+                "Heating ({}°C -> {}°C)",
+                status.current_temperature,
+                status.target_temperature()
+            ).yellow(),
+            StatusCode::Ready => "Ready".green().bold(),
+            StatusCode::Standby => "Standby".blue(),
+            _ => "On".green(),
+        }
     };
     println!("  Status:         {}", status_display);
-
-    if status.is_ready_for_use {
-        println!("                  {}", "Ready for use!".green().bold());
-    }
 
     println!();
 
@@ -582,11 +579,13 @@ fn print_status(status: &SaunaStatus) {
     };
     println!("  Mode:           {}", mode);
 
-    // Temperature
-    println!(
-        "  Current Temp:   {}°C",
-        format!("{}", status.current_temperature).white().bold()
-    );
+    // Temperature - show "N/A" when sauna is off (sensor may return invalid values)
+    let current_temp_display = if status.is_powered_on {
+        format!("{}°C", status.current_temperature).white().bold()
+    } else {
+        "N/A".dimmed()
+    };
+    println!("  Current Temp:   {}", current_temp_display);
     println!(
         "  Target Temp:    {}°C",
         format!("{}", status.target_temperature()).cyan()
@@ -605,7 +604,7 @@ fn print_status(status: &SaunaStatus) {
     }
 
     // Timer
-    if status.show_bathing_hour || status.is_powered_on {
+    if status.show_remaining_bathing_time || status.is_powered_on {
         println!();
         println!(
             "  Remaining Time: {}",
@@ -614,12 +613,12 @@ fn print_status(status: &SaunaStatus) {
     }
 
     // Scheduled start
-    if status.selected_hour > 0 || status.selected_minute > 0 {
-        println!(
-            "  Scheduled:      {:02}:{:02}",
-            status.selected_hour, status.selected_minute
-        );
-    }
+    let schedule_display = if status.time_selected {
+        format!("{:02}:{:02}", status.selected_hour, status.selected_minute).yellow()
+    } else {
+        "Not scheduled".dimmed()
+    };
+    println!("  Scheduled:      {}", schedule_display);
 
     println!();
 }
@@ -635,13 +634,13 @@ async fn cmd_power_on(
     let client = create_authenticated_client(&config, debug, debug_file).await?;
 
     let sauna_id = sauna_id.or(config.sauna_id).context(
-        "No sauna ID provided. Use --sauna-id or set a default with 'klafs config --sauna-id <ID>'",
+        "No sauna ID provided. Use --sauna-id or set a default with 'sauna config --sauna-id <ID>'",
     )?;
 
     let pin = match pin {
         Some(p) => p,
         None => Config::get_pin(&sauna_id)?
-            .context("No PIN provided. Use --pin or store it with 'klafs config --pin <PIN>'")?,
+            .context("No PIN provided. Use --pin or store it with 'sauna config --pin <PIN>'")?,
     };
 
     // Parse optional schedule time
@@ -699,7 +698,7 @@ async fn cmd_power_off(
     let client = create_authenticated_client(&config, debug, debug_file).await?;
 
     let sauna_id = sauna_id.or(config.sauna_id).context(
-        "No sauna ID provided. Use --sauna-id or set a default with 'klafs config --sauna-id <ID>'",
+        "No sauna ID provided. Use --sauna-id or set a default with 'sauna config --sauna-id <ID>'",
     )?;
 
     println!("{}", "Powering off sauna...".dimmed());
@@ -721,7 +720,7 @@ async fn cmd_set_temp(
     let client = create_authenticated_client(&config, debug, debug_file).await?;
 
     let sauna_id = sauna_id.or(config.sauna_id).context(
-        "No sauna ID provided. Use --sauna-id or set a default with 'klafs config --sauna-id <ID>'",
+        "No sauna ID provided. Use --sauna-id or set a default with 'sauna config --sauna-id <ID>'",
     )?;
 
     println!("{}", format!("Setting temperature to {}°C...", temperature).dimmed());
@@ -747,7 +746,7 @@ async fn cmd_set_mode(
     let client = create_authenticated_client(&config, debug, debug_file).await?;
 
     let sauna_id = sauna_id.or(config.sauna_id).context(
-        "No sauna ID provided. Use --sauna-id or set a default with 'klafs config --sauna-id <ID>'",
+        "No sauna ID provided. Use --sauna-id or set a default with 'sauna config --sauna-id <ID>'",
     )?;
 
     let sauna_mode = match mode.to_lowercase().as_str() {
@@ -780,7 +779,7 @@ async fn cmd_set_humidity(
     let client = create_authenticated_client(&config, debug, debug_file).await?;
 
     let sauna_id = sauna_id.or(config.sauna_id).context(
-        "No sauna ID provided. Use --sauna-id or set a default with 'klafs config --sauna-id <ID>'",
+        "No sauna ID provided. Use --sauna-id or set a default with 'sauna config --sauna-id <ID>'",
     )?;
 
     println!("{}", format!("Setting humidity level to {}...", level).dimmed());
@@ -807,7 +806,7 @@ async fn cmd_schedule(
     let client = create_authenticated_client(&config, debug, debug_file).await?;
 
     let sauna_id = sauna_id.or(config.sauna_id).context(
-        "No sauna ID provided. Use --sauna-id or set a default with 'klafs config --sauna-id <ID>'",
+        "No sauna ID provided. Use --sauna-id or set a default with 'sauna config --sauna-id <ID>'",
     )?;
 
     // Determine if we're setting or clearing the schedule
@@ -876,7 +875,7 @@ async fn cmd_configure(
     let client = create_authenticated_client(&config, debug, debug_file).await?;
 
     let sauna_id = sauna_id.or(config.sauna_id).context(
-        "No sauna ID provided. Use --sauna-id or set a default with 'klafs config --sauna-id <ID>'",
+        "No sauna ID provided. Use --sauna-id or set a default with 'sauna config --sauna-id <ID>'",
     )?;
 
     // Parse time if provided
@@ -970,7 +969,7 @@ async fn cmd_profile(command: ProfileCommands, debug: bool, debug_file: &Path) -
                 println!("{}", "No profiles saved.".dimmed());
                 println!(
                     "{}",
-                    "Use 'klafs profile create <name> --mode <mode> --temp <temp>' to create one.".dimmed()
+                    "Use 'sauna profile create <name> --mode <mode> --temp <temp>' to create one.".dimmed()
                 );
                 return Ok(());
             }
@@ -1022,7 +1021,7 @@ async fn cmd_profile(command: ProfileCommands, debug: bool, debug_file: &Path) -
                 .with_context(|| format!("Profile '{}' not found", name))?;
 
             let sauna_id = sauna_id.or(config.sauna_id.clone()).context(
-                "No sauna ID provided. Use --sauna-id or set a default with 'klafs config --sauna-id <ID>'",
+                "No sauna ID provided. Use --sauna-id or set a default with 'sauna config --sauna-id <ID>'",
             )?;
 
             let client = create_authenticated_client(&config, debug, debug_file).await?;
@@ -1063,7 +1062,7 @@ async fn cmd_profile(command: ProfileCommands, debug: bool, debug_file: &Path) -
                 let pin = match pin {
                     Some(p) => p,
                     None => Config::get_pin(&sauna_id)?
-                        .context("No PIN provided. Use --pin or store it with 'klafs config --pin <PIN>'")?,
+                        .context("No PIN provided. Use --pin or store it with 'sauna config --pin <PIN>'")?,
                 };
 
                 println!("{}", "Starting sauna...".dimmed());
@@ -1101,10 +1100,10 @@ async fn create_authenticated_client(
     let username = config
         .username
         .as_ref()
-        .context("Not logged in. Run 'klafs login' first.")?;
+        .context("Not logged in. Run 'sauna login' first.")?;
 
     let password = Config::get_password(username)?
-        .context("Password not found in keyring. Run 'klafs login' again.")?;
+        .context("Password not found in keyring. Run 'sauna login' again.")?;
 
     let client_config = create_client_config(debug, debug_file);
     let client = KlafsClient::with_config(client_config);

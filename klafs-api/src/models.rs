@@ -147,20 +147,82 @@ pub struct SaunaStatus {
     /// Optional status message
     pub status_message: Option<String>,
 
-    /// Whether to show bathing hours
-    pub show_bathing_hour: bool,
+    /// Whether to show remaining bathing time
+    pub show_remaining_bathing_time: bool,
 
     /// Remaining bathing hours
-    pub bathing_hours: i32,
+    pub remaining_bathing_hours: i32,
 
     /// Remaining bathing minutes
-    pub bathing_minutes: i32,
+    pub remaining_bathing_minutes: i32,
+
+    /// Whether bathing time is selected
+    pub bathing_time_selected: bool,
+
+    /// Selected bathing time hours
+    pub selected_bathing_time_hours: i32,
+
+    /// Selected bathing time minutes
+    pub selected_bathing_time_minutes: i32,
+
+    /// Whether a scheduled time is set
+    pub time_selected: bool,
 
     /// Current humidity status indicator
     pub current_humidity_status: i32,
 
     /// Current temperature status indicator
     pub current_temperature_status: i32,
+
+    /// Currently selected temperature (based on mode)
+    pub selected_temperature: i32,
+
+    /// Currently selected mode (1=Sauna, 2=Sanarium, etc.)
+    pub selected_mode: i32,
+
+    /// Operation status
+    pub op_status: i32,
+
+    /// Light is on
+    pub light_is_on: bool,
+
+    /// Light brightness
+    pub light_brightness: i32,
+
+    /// Color light is on
+    pub color_light_is_on: bool,
+
+    /// Color light brightness
+    pub color_light_brightness: i32,
+
+    /// Color light color
+    pub color_light_color: i32,
+
+    /// Sunset is on
+    pub sunset_is_on: bool,
+
+    /// Sunset brightness
+    pub sunset_brightness: i32,
+
+    /// Whether login is required
+    #[serde(default)]
+    pub login_required: bool,
+
+    /// Whether request was successful
+    #[serde(default = "default_true")]
+    pub success: bool,
+
+    /// Error message if any
+    #[serde(default)]
+    pub error_message: String,
+
+    /// Error message header
+    #[serde(default)]
+    pub error_message_header: String,
+}
+
+fn default_true() -> bool {
+    true
 }
 
 impl SaunaStatus {
@@ -197,7 +259,7 @@ impl SaunaStatus {
 
     /// Get remaining bathing time as a formatted string
     pub fn remaining_time(&self) -> String {
-        format!("{}h {:02}m", self.bathing_hours, self.bathing_minutes)
+        format!("{}h {:02}m", self.remaining_bathing_hours, self.remaining_bathing_minutes)
     }
 }
 
@@ -207,10 +269,8 @@ pub(crate) struct PowerControlRequest {
     pub id: String,
     pub pin: String,
     pub time_selected: bool,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub sel_hour: Option<i32>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub sel_min: Option<i32>,
+    pub sel_hour: i32,
+    pub sel_min: i32,
 }
 
 /// Request body for setting temperature
@@ -232,23 +292,6 @@ pub(crate) struct SetHumidityRequest {
 pub(crate) struct SetModeRequest {
     pub id: String,
     pub selected_mode: u8,
-}
-
-/// Configuration change request for PostConfigChange endpoint
-#[derive(Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub(crate) struct ConfigChangeRequest {
-    pub sauna_id: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub selected_sauna_temperature: Option<i32>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub selected_sanarium_temperature: Option<i32>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub selected_hum_level: Option<i32>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub selected_hour: Option<i32>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub selected_minute: Option<i32>,
 }
 
 /// Request body for SetSelectedTime endpoint (schedule without starting)

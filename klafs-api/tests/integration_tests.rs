@@ -155,8 +155,8 @@ mod status_tests {
         assert!(status.is_powered_on);
         assert!(status.sauna_selected);
         assert_eq!(status.status_code, 1); // Heating up
-        assert_eq!(status.bathing_hours, 1);
-        assert_eq!(status.bathing_minutes, 30);
+        assert_eq!(status.remaining_bathing_hours, 1);
+        assert_eq!(status.remaining_bathing_minutes, 30);
     }
 
     #[tokio::test]
@@ -313,6 +313,14 @@ mod power_control_tests {
         let mock_server = MockServer::start().await;
         let client = setup_logged_in_client(&mock_server).await;
 
+        // When scheduling, power_on first calls SetSelectedTime
+        Mock::given(method("POST"))
+            .and(path("/SaunaApp/SetSelectedTime"))
+            .respond_with(ResponseTemplate::new(200).set_body_string(r#"{"success": true}"#))
+            .mount(&mock_server)
+            .await;
+
+        // Then it calls StartCabin
         Mock::given(method("POST"))
             .and(path("/SaunaApp/StartCabin"))
             .and(body_string_contains("\"time_selected\":true"))
@@ -496,8 +504,9 @@ mod control_tests {
         let mock_server = MockServer::start().await;
         let client = setup_logged_in_client(&mock_server).await;
 
+        // set_start_time now delegates to set_selected_time which uses SetSelectedTime endpoint
         Mock::given(method("POST"))
-            .and(path("/SaunaApp/PostConfigChange"))
+            .and(path("/SaunaApp/SetSelectedTime"))
             .respond_with(ResponseTemplate::new(200).set_body_string(r#"{"success": true}"#))
             .mount(&mock_server)
             .await;
@@ -638,10 +647,10 @@ mod control_tests {
         let mock_server = MockServer::start().await;
         let client = setup_logged_in_client(&mock_server).await;
 
+        // Mock the ChangeTemperature endpoint (configure now uses individual endpoints)
         Mock::given(method("POST"))
-            .and(path("/SaunaApp/PostConfigChange"))
-            .and(body_string_contains("\"selectedSaunaTemperature\":85"))
-            .and(body_string_contains("\"selectedHumLevel\":5"))
+            .and(path("/SaunaApp/ChangeTemperature"))
+            .and(body_string_contains("\"temperature\":85"))
             .respond_with(ResponseTemplate::new(200).set_body_string(r#"{"success": true}"#))
             .mount(&mock_server)
             .await;
@@ -651,7 +660,7 @@ mod control_tests {
                 "364cc9db-86f1-49d1-86cd-f6ef9b20a490",
                 Some(85),
                 None,
-                Some(5),
+                None,
                 None,
                 None,
             )
@@ -665,10 +674,12 @@ mod control_tests {
         let mock_server = MockServer::start().await;
         let client = setup_logged_in_client(&mock_server).await;
 
+        // Mock the SetSelectedTime endpoint
         Mock::given(method("POST"))
-            .and(path("/SaunaApp/PostConfigChange"))
-            .and(body_string_contains("\"selectedHour\":18"))
-            .and(body_string_contains("\"selectedMinute\":30"))
+            .and(path("/SaunaApp/SetSelectedTime"))
+            .and(body_string_contains("\"time_set\":true"))
+            .and(body_string_contains("\"hours\":18"))
+            .and(body_string_contains("\"minutes\":30"))
             .respond_with(ResponseTemplate::new(200).set_body_string(r#"{"success": true}"#))
             .mount(&mock_server)
             .await;

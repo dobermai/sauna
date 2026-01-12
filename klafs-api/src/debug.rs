@@ -162,9 +162,9 @@ impl TrafficEntry {
                     output.push_str(body);
                 }
             } else {
-                // Truncate very long HTML responses
-                if body.len() > 2000 {
-                    output.push_str(&body[..2000]);
+                // Only truncate extremely long HTML responses (>500KB)
+                if body.len() > 500000 {
+                    output.push_str(&body[..500000]);
                     output.push_str(&format!("\n... [truncated, {} bytes total]", body.len()));
                 } else {
                     output.push_str(body);
