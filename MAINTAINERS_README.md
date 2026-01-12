@@ -52,7 +52,7 @@ cargo release patch --execute
 
 ### What Gets Published
 
-**crates.io**: Only the `klafs-api` library crate is published.
+**crates.io**: Both `klafs-api` (library) and `sauna` (CLI) are published.
 
 **GitHub Releases**: The `sauna` CLI binaries are built for:
 

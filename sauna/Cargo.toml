@@ -7,6 +7,8 @@ license.workspace = true
 authors.workspace = true
 repository.workspace = true
 readme = "../README.md"
+keywords = ["sauna", "klafs", "iot", "smart-home", "cli"]
+categories = ["command-line-utilities"]
 
 [[bin]]
 name = "sauna"
@@ -33,5 +35,3 @@ keyring.workspace = true
 # Password input
 rpassword = "7"
 
-[package.metadata.release]
-release = false

@@ -52,3 +52,11 @@ jobs:
         run: cargo publish -p klafs-api
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+
+      - name: Wait for crates.io to index klafs-api
+        run: sleep 30
+
+      - name: Publish sauna
+        run: cargo publish -p sauna
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}

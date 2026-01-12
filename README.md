@@ -69,6 +69,12 @@ sauna power-off
 brew install dobermai/tap/sauna
 ```
 
+### Cargo
+
+```bash
+cargo install sauna
+```
+
 ### Download Binary
 
 Pre-built binaries are available for Linux, macOS, and Windows on the [Releases](https://github.com/dobermai/sauna/releases) page.
