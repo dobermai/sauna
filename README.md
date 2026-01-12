@@ -118,8 +118,11 @@ Sauna Status
 ### Power Control
 
 ```bash
-# Power on (requires PIN)
+# Power on immediately (requires PIN)
 klafs power-on
+
+# Schedule power on for a specific time
+klafs power-on --at 18:30
 
 # Power off
 klafs power-off
@@ -145,8 +148,56 @@ klafs set-humidity 7
 ### Scheduling
 
 ```bash
-# Set sauna start time (24-hour format)
+# Set scheduled start time (without starting)
+klafs schedule 18:30
+
+# Clear the schedule
+klafs schedule --clear
+
+# Legacy command (deprecated)
 klafs set-time 18:30
+```
+
+### Profiles
+
+Save and reuse sauna configurations:
+
+```bash
+# Create a profile
+klafs profile create hot --mode sauna --temp 90
+klafs profile create relaxed --mode sanarium --temp 60 --humidity 7
+
+# List all profiles
+klafs profile list
+
+# Show profile details
+klafs profile show hot
+
+# Apply a profile (sets mode, temperature, humidity)
+klafs profile apply hot
+
+# Apply and start the sauna
+klafs profile apply hot --start
+
+# Delete a profile
+klafs profile delete hot
+```
+
+Profiles are stored in `~/.config/klafs/profiles.toml`.
+
+### Configure Multiple Settings
+
+Set multiple parameters in one command:
+
+```bash
+# Set temperature and humidity
+klafs configure --temp 85 --humidity 5
+
+# Set temperature and schedule
+klafs configure --temp 85 --time 18:30
+
+# Set all at once
+klafs configure --temp 85 --humidity 5 --time 18:30
 ```
 
 ## Library Usage
@@ -189,18 +240,23 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 ## API Reference
 
+Base URL: `https://sauna-app-19.klafs.com`
+
 ### Endpoints
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
 | `/Account/Login` | POST | Authenticate (form-encoded) |
 | `/SaunaApp/ChangeSettings` | GET | List registered saunas (HTML) |
-| `/Control/GetSaunaStatus` | POST | Get sauna status (JSON) |
-| `/SaunaApp/StartCabin` | POST | Power on sauna |
+| `/SaunaApp/GetData?id={id}` | GET | Get sauna status (JSON) |
+| `/SaunaApp/StartCabin` | POST | Power on sauna (supports scheduling) |
 | `/SaunaApp/StopCabin` | POST | Power off sauna |
 | `/SaunaApp/ChangeTemperature` | POST | Set target temperature |
 | `/SaunaApp/ChangeHumLevel` | POST | Set humidity level |
 | `/SaunaApp/SetMode` | POST | Set operating mode |
+| `/SaunaApp/SetSelectedTime` | POST | Set scheduled start time |
+| `/SaunaApp/FavoriteSelected` | POST | Apply profile settings |
+| `/SaunaApp/PostConfigChange` | POST | Configure multiple settings |
 
 ### Sauna Modes
 
@@ -237,7 +293,8 @@ klafs/
 └── klafs-cli/              # CLI application
     └── src/
         ├── main.rs         # CLI commands
-        └── config.rs       # Configuration & keyring
+        ├── config.rs       # Configuration & keyring
+        └── profiles.rs     # Profile storage
 ```
 
 ## Security Notes
@@ -253,7 +310,10 @@ klafs/
 - [x] CLI with credential storage
 - [x] Sauna discovery (list registered saunas)
 - [x] Power on/off commands
-- [x] Temperature, mode, humidity, and scheduling control
+- [x] Temperature, mode, humidity control
+- [x] Scheduling (immediate and timed start)
+- [x] Profiles feature (save/apply configurations)
+- [x] Combined configure command
 - [x] HTTP traffic debugging
 - [x] Integration tests with mock server
 - [ ] UniFFI bindings for iOS/macOS Swift apps
