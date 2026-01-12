@@ -296,7 +296,7 @@ use klafs_api::KlafsClient;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let client = KlafsClient::new();
+    let client = KlafsClient::new()?;
 
     // Login (use your KLAFS username, not email!)
     client.login("your_username", "password").await?;

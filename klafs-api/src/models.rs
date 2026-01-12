@@ -358,4 +358,3 @@ impl From<LightType> for u8 {
         light as u8
     }
 }
-

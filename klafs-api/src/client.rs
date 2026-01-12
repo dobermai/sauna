@@ -34,6 +34,7 @@ pub const DEFAULT_BASE_URL: &str = "https://sauna-app-19.klafs.com";
 
 /// User agent to use for requests (mimics the mobile app)
 const USER_AGENT: &str = "KlafsSaunaApp/1.0";
+const AUTH_COOKIE_NAME: &str = ".ASPXAUTH";
 
 /// Configuration for the Klafs client
 #[derive(Debug, Clone)]
@@ -79,7 +80,7 @@ impl ClientConfig {
 ///
 /// #[tokio::main]
 /// async fn main() -> Result<(), Box<dyn std::error::Error>> {
-///     let client = KlafsClient::new();
+///     let client = KlafsClient::new()?;
 ///     client.login("user@example.com", "password").await?;
 ///
 ///     let status = client.get_status("sauna-uuid").await?;
@@ -104,20 +105,14 @@ impl std::fmt::Debug for KlafsClient {
     }
 }
 
-impl Default for KlafsClient {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 impl KlafsClient {
     /// Create a new Klafs client with default configuration
-    pub fn new() -> Self {
+    pub fn new() -> Result<Self> {
         Self::with_config(ClientConfig::default())
     }
 
     /// Create a new Klafs client with custom configuration
-    pub fn with_config(config: ClientConfig) -> Self {
+    pub fn with_config(config: ClientConfig) -> Result<Self> {
         let cookie_jar = Arc::new(Jar::default());
 
         // Build default headers - X-Requested-With is required for ASP.NET AJAX requests
@@ -132,16 +127,15 @@ impl KlafsClient {
             .user_agent(USER_AGENT)
             .default_headers(default_headers)
             .timeout(std::time::Duration::from_secs(config.timeout_secs))
-            .build()
-            .expect("Failed to build HTTP client");
+            .build()?;
 
-        Self {
+        Ok(Self {
             client,
             cookie_jar,
             base_url: config.base_url,
             verification_token: std::sync::RwLock::new(None),
             debugger: Arc::new(HttpDebugger::new(config.debug)),
-        }
+        })
     }
 
     /// Get the debugger for accessing traffic logs
@@ -302,12 +296,9 @@ impl KlafsClient {
             }
 
             // Verify we actually got a session cookie
-            let base_url: Url = self.base_url.parse().expect("Invalid base URL");
-            let cookies: Vec<_> = self.cookie_jar.cookies(&base_url).into_iter().collect();
-
-            if cookies.is_empty() {
+            if !self.has_auth_cookie(&headers) {
                 return Err(KlafsError::AuthenticationFailed {
-                    message: "No session cookie received".to_string(),
+                    message: "No authentication cookie received".to_string(),
                 });
             }
 
@@ -364,6 +355,26 @@ impl KlafsClient {
         }
 
         let sauna_status: SaunaStatus = serde_json::from_str(&response_text)?;
+
+        if sauna_status.login_required {
+            return Err(KlafsError::SessionExpired);
+        }
+
+        if !sauna_status.success {
+            let message = if !sauna_status.error_message.is_empty() {
+                sauna_status.error_message.clone()
+            } else if !sauna_status.error_message_header.is_empty() {
+                sauna_status.error_message_header.clone()
+            } else if let Some(status_message) = sauna_status.status_message.as_ref() {
+                status_message.clone()
+            } else {
+                "Unknown error".to_string()
+            };
+            return Err(KlafsError::ApiError {
+                status_code: status.as_u16(),
+                message,
+            });
+        }
 
         debug!(
             "Sauna {} status: connected={}, powered={}",
@@ -509,26 +520,7 @@ impl KlafsClient {
             return Err(KlafsError::InvalidPin);
         }
 
-        if !status.is_success() {
-            return Err(KlafsError::ApiError {
-                status_code: status.as_u16(),
-                message: response_text,
-            });
-        }
-
-        // Check for API-level errors in JSON response (Success: false)
-        if let Ok(json) = serde_json::from_str::<serde_json::Value>(&response_text) {
-            if json.get("Success").and_then(|v| v.as_bool()) == Some(false) {
-                let error_msg = json
-                    .get("ErrorMessage")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("Unknown error");
-                return Err(KlafsError::ApiError {
-                    status_code: status.as_u16(),
-                    message: error_msg.to_string(),
-                });
-            }
-        }
+        self.check_response_status(status, &response_text)?;
 
         match schedule {
             Some((hour, minute)) => {
@@ -665,6 +657,10 @@ impl KlafsClient {
     pub async fn set_temperature(&self, sauna_id: &str, temperature: i32) -> Result<()> {
         Self::validate_sauna_id(sauna_id)?;
         Self::validate_temperature(temperature)?;
+        let status = self.get_status(sauna_id).await?;
+        if status.sanarium_selected {
+            Self::validate_sanarium_temperature(temperature)?;
+        }
 
         info!(
             "Setting temperature to {}°C for sauna {}",
@@ -1046,6 +1042,23 @@ impl KlafsClient {
             });
         }
 
+        if sauna_temperature.is_some() && sanarium_temperature.is_some() {
+            return Err(KlafsError::InvalidParameter {
+                message: "Cannot set both sauna and sanarium temperatures in one call. Set the mode and call configure twice."
+                    .to_string(),
+            });
+        }
+
+        if sanarium_temperature.is_some() {
+            let status = self.get_status(sauna_id).await?;
+            if !status.sanarium_selected {
+                return Err(KlafsError::InvalidParameter {
+                    message: "Sanarium temperature can only be set when Sanarium mode is selected."
+                        .to_string(),
+                });
+            }
+        }
+
         info!("Configuring sauna {}: {}", sauna_id, changes.join(", "));
 
         // Apply changes using individual endpoints
@@ -1057,6 +1070,10 @@ impl KlafsClient {
         // Humidity change (only works in Sanarium mode - set_humidity checks this)
         if let Some(level) = humidity_level {
             self.set_humidity(sauna_id, level).await?;
+        }
+
+        if let Some(temp) = sanarium_temperature {
+            self.set_temperature(sauna_id, temp).await?;
         }
 
         // Time change
@@ -1093,7 +1110,81 @@ impl KlafsClient {
             });
         }
 
+        self.check_api_success(status, response_text)?;
+
         Ok(())
+    }
+
+    fn check_api_success(&self, status: reqwest::StatusCode, response_text: &str) -> Result<()> {
+        let json = match serde_json::from_str::<serde_json::Value>(response_text) {
+            Ok(json) => json,
+            Err(_) => return Ok(()),
+        };
+
+        if json
+            .get("loginRequired")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false)
+        {
+            return Err(KlafsError::SessionExpired);
+        }
+
+        let success = json
+            .get("success")
+            .and_then(|v| v.as_bool())
+            .or_else(|| json.get("Success").and_then(|v| v.as_bool()));
+
+        if success == Some(false) {
+            return Err(KlafsError::ApiError {
+                status_code: status.as_u16(),
+                message: Self::extract_error_message(&json),
+            });
+        }
+
+        Ok(())
+    }
+
+    fn extract_error_message(json: &serde_json::Value) -> String {
+        let keys = [
+            "errorMessage",
+            "ErrorMessage",
+            "message",
+            "Message",
+            "errorMessageHeader",
+            "ErrorMessageHeader",
+        ];
+
+        for key in keys {
+            if let Some(value) = json.get(key).and_then(|v| v.as_str()) {
+                if !value.is_empty() {
+                    return value.to_string();
+                }
+            }
+        }
+
+        "Unknown error".to_string()
+    }
+
+    fn has_auth_cookie(&self, headers: &reqwest::header::HeaderMap) -> bool {
+        let header_has_cookie = headers
+            .get_all(reqwest::header::SET_COOKIE)
+            .iter()
+            .any(|value| {
+                value
+                    .to_str()
+                    .map(|s| s.contains(AUTH_COOKIE_NAME))
+                    .unwrap_or(false)
+            });
+
+        if header_has_cookie {
+            return true;
+        }
+
+        let base_url: Url = self.base_url.parse().expect("Invalid base URL");
+        self.cookie_jar
+            .cookies(&base_url)
+            .and_then(|cookies| cookies.to_str().ok().map(|s| s.contains(AUTH_COOKIE_NAME)))
+            .unwrap_or(false)
     }
 
     /// Extract sauna information from the ChangeSettings HTML page
@@ -1317,21 +1408,21 @@ mod tests {
 
     #[test]
     fn test_client_creation() {
-        let client = KlafsClient::new();
+        let client = KlafsClient::new().unwrap();
         assert!(!client.is_logged_in());
     }
 
     #[test]
     fn test_client_with_config() {
         let config = ClientConfig::for_testing("http://localhost:8080");
-        let client = KlafsClient::with_config(config);
+        let client = KlafsClient::with_config(config).unwrap();
         assert!(!client.is_logged_in());
         assert!(client.debugger().is_enabled());
     }
 
     #[test]
     fn test_extract_verification_token() {
-        let client = KlafsClient::new();
+        let client = KlafsClient::new().unwrap();
 
         let html = r#"
             <html>
@@ -1349,7 +1440,7 @@ mod tests {
 
     #[test]
     fn test_extract_verification_token_not_found() {
-        let client = KlafsClient::new();
+        let client = KlafsClient::new().unwrap();
         let html = "<html><body>No token here</body></html>";
 
         let result = client.extract_verification_token(html);
@@ -1358,7 +1449,7 @@ mod tests {
 
     #[test]
     fn test_extract_verification_token_from_script() {
-        let client = KlafsClient::new();
+        let client = KlafsClient::new().unwrap();
         let html = r#"
             <html>
                 <head>
@@ -1375,7 +1466,7 @@ mod tests {
 
     #[test]
     fn test_extract_verification_token_from_id() {
-        let client = KlafsClient::new();
+        let client = KlafsClient::new().unwrap();
         let html = r#"
             <html>
                 <body>
@@ -1422,7 +1513,7 @@ mod tests {
 
     #[test]
     fn test_extract_saunas_from_html() {
-        let client = KlafsClient::new();
+        let client = KlafsClient::new().unwrap();
 
         let html = r#"
             <html>

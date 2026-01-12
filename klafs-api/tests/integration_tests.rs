@@ -17,7 +17,7 @@ fn create_test_client(mock_server: &MockServer) -> KlafsClient {
         debug: DebugConfig::enabled(),
         timeout_secs: 5,
     };
-    KlafsClient::with_config(config)
+    KlafsClient::with_config(config).unwrap()
 }
 
 mod login_tests {
@@ -170,6 +170,27 @@ mod status_tests {
         Mock::given(method("GET"))
             .and(path("/SaunaApp/GetData"))
             .respond_with(ResponseTemplate::new(401))
+            .mount(&mock_server)
+            .await;
+
+        let result = client
+            .get_status("364cc9db-86f1-49d1-86cd-f6ef9b20a490")
+            .await;
+
+        assert!(matches!(result, Err(KlafsError::SessionExpired)));
+    }
+
+    #[tokio::test]
+    async fn test_get_status_login_required() {
+        let mock_server = MockServer::start().await;
+        let client = create_test_client(&mock_server);
+
+        let body = fixture("sauna_status.json")
+            .replace("\"loginRequired\": false", "\"loginRequired\": true");
+
+        Mock::given(method("GET"))
+            .and(path("/SaunaApp/GetData"))
+            .respond_with(ResponseTemplate::new(200).set_body_string(body))
             .mount(&mock_server)
             .await;
 
@@ -348,7 +369,7 @@ mod power_control_tests {
 
     #[tokio::test]
     async fn test_power_on_schedule_validation() {
-        let client = KlafsClient::new();
+        let client = KlafsClient::new().unwrap();
 
         // Invalid hour (too high)
         let result = client
@@ -419,9 +440,39 @@ mod control_tests {
     }
 
     #[tokio::test]
+    async fn test_set_mode_api_error() {
+        let mock_server = MockServer::start().await;
+        let client = setup_logged_in_client(&mock_server).await;
+
+        Mock::given(method("POST"))
+            .and(path("/SaunaApp/SetMode"))
+            .respond_with(
+                ResponseTemplate::new(200).set_body_string(
+                    r#"{"success": false, "errorMessage": "Mode change rejected"}"#,
+                ),
+            )
+            .mount(&mock_server)
+            .await;
+
+        let result = client
+            .set_mode("364cc9db-86f1-49d1-86cd-f6ef9b20a490", SaunaMode::Sanarium)
+            .await;
+
+        assert!(matches!(result, Err(KlafsError::ApiError { .. })));
+    }
+
+    #[tokio::test]
     async fn test_set_temperature() {
         let mock_server = MockServer::start().await;
         let client = setup_logged_in_client(&mock_server).await;
+
+        Mock::given(method("GET"))
+            .and(path("/SaunaApp/GetData"))
+            .respond_with(
+                ResponseTemplate::new(200).set_body_string(fixture("sauna_status_sauna_mode.json")),
+            )
+            .mount(&mock_server)
+            .await;
 
         Mock::given(method("POST"))
             .and(path("/SaunaApp/ChangeTemperature"))
@@ -438,7 +489,7 @@ mod control_tests {
 
     #[tokio::test]
     async fn test_set_temperature_invalid_range() {
-        let client = KlafsClient::new();
+        let client = KlafsClient::new().unwrap();
 
         // Temperature too low
         let result = client
@@ -504,7 +555,7 @@ mod control_tests {
 
     #[tokio::test]
     async fn test_set_humidity_invalid_range() {
-        let client = KlafsClient::new();
+        let client = KlafsClient::new().unwrap();
 
         // Level too low
         let result = client
@@ -540,7 +591,7 @@ mod control_tests {
 
     #[tokio::test]
     async fn test_set_start_time_invalid() {
-        let client = KlafsClient::new();
+        let client = KlafsClient::new().unwrap();
 
         // Invalid hour
         let result = client
@@ -597,7 +648,7 @@ mod control_tests {
 
     #[tokio::test]
     async fn test_set_selected_time_invalid() {
-        let client = KlafsClient::new();
+        let client = KlafsClient::new().unwrap();
 
         // Invalid hour
         let result = client
@@ -616,6 +667,14 @@ mod control_tests {
     async fn test_configure() {
         let mock_server = MockServer::start().await;
         let client = setup_logged_in_client(&mock_server).await;
+
+        Mock::given(method("GET"))
+            .and(path("/SaunaApp/GetData"))
+            .respond_with(
+                ResponseTemplate::new(200).set_body_string(fixture("sauna_status_sauna_mode.json")),
+            )
+            .mount(&mock_server)
+            .await;
 
         // Mock the ChangeTemperature endpoint (configure now uses individual endpoints)
         Mock::given(method("POST"))
@@ -670,7 +729,7 @@ mod control_tests {
 
     #[tokio::test]
     async fn test_configure_no_changes() {
-        let client = KlafsClient::new();
+        let client = KlafsClient::new().unwrap();
 
         // No parameters provided
         let result = client
@@ -692,7 +751,7 @@ mod validation_tests {
 
     #[tokio::test]
     async fn test_invalid_pin_format_too_short() {
-        let client = KlafsClient::new();
+        let client = KlafsClient::new().unwrap();
         let result = client
             .power_on("364cc9db-86f1-49d1-86cd-f6ef9b20a490", "123", None)
             .await;
@@ -704,7 +763,7 @@ mod validation_tests {
 
     #[tokio::test]
     async fn test_invalid_pin_format_too_long() {
-        let client = KlafsClient::new();
+        let client = KlafsClient::new().unwrap();
         let result = client
             .power_on("364cc9db-86f1-49d1-86cd-f6ef9b20a490", "12345", None)
             .await;
@@ -713,7 +772,7 @@ mod validation_tests {
 
     #[tokio::test]
     async fn test_invalid_pin_format_non_numeric() {
-        let client = KlafsClient::new();
+        let client = KlafsClient::new().unwrap();
         let result = client
             .power_on("364cc9db-86f1-49d1-86cd-f6ef9b20a490", "abcd", None)
             .await;
@@ -722,7 +781,7 @@ mod validation_tests {
 
     #[tokio::test]
     async fn test_invalid_sauna_id_format() {
-        let client = KlafsClient::new();
+        let client = KlafsClient::new().unwrap();
 
         // Test with garbage string
         let result = client.get_status("not-a-uuid").await;
@@ -734,14 +793,14 @@ mod validation_tests {
 
     #[tokio::test]
     async fn test_invalid_sauna_id_empty() {
-        let client = KlafsClient::new();
+        let client = KlafsClient::new().unwrap();
         let result = client.get_status("").await;
         assert!(matches!(result, Err(KlafsError::InvalidParameter { .. })));
     }
 
     #[tokio::test]
     async fn test_invalid_sauna_id_partial_uuid() {
-        let client = KlafsClient::new();
+        let client = KlafsClient::new().unwrap();
         let result = client.get_status("364cc9db-86f1-49d1").await;
         assert!(matches!(result, Err(KlafsError::InvalidParameter { .. })));
     }

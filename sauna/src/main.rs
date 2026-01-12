@@ -430,7 +430,7 @@ async fn cmd_login(
     println!("{}", "Logging in...".dimmed());
 
     let client_config = create_client_config(debug, debug_file);
-    let client = KlafsClient::with_config(client_config);
+    let client = KlafsClient::with_config(client_config)?;
 
     client.login(&username, &password).await.with_context(|| {
         format!(
@@ -670,14 +670,12 @@ fn print_status(status: &SaunaStatus) {
                 "Scheduled".blue()
             }
         }
-        OpStatus::Heating => {
-            format!(
-                "Heating ({}°C -> {}°C)",
-                status.current_temperature,
-                status.target_temperature()
-            )
-            .yellow()
-        }
+        OpStatus::Heating => format!(
+            "Heating ({}°C -> {}°C)",
+            status.current_temperature,
+            status.target_temperature()
+        )
+        .yellow(),
         OpStatus::Ready => "Ready".green().bold(),
     };
     println!("  Status:         {}", status_display);
@@ -1205,7 +1203,7 @@ async fn create_authenticated_client(
         .context("Password not found in keyring. Run 'sauna login' again.")?;
 
     let client_config = create_client_config(debug, debug_file);
-    let client = KlafsClient::with_config(client_config);
+    let client = KlafsClient::with_config(client_config)?;
     client.login(username, &password).await?;
 
     if debug {

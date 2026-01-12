@@ -20,7 +20,7 @@
 //! #[tokio::main]
 //! async fn main() -> Result<(), Box<dyn std::error::Error>> {
 //!     // Create client and authenticate
-//!     let client = KlafsClient::new();
+//!     let client = KlafsClient::new()?;
 //!     client.login("user@example.com", "password").await?;
 //!
 //!     // Get sauna status
@@ -52,8 +52,9 @@
 //!     ..Default::default()
 //! };
 //!
-//! let client = KlafsClient::with_config(config);
+//! let client = KlafsClient::with_config(config)?;
 //! // All HTTP traffic will be logged to klafs-debug.log
+//! # Ok::<(), Box<dyn std::error::Error>>(())
 //! ```
 //!
 //! # Security Warning
