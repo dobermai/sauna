@@ -7,6 +7,8 @@ license.workspace = true
 authors.workspace = true
 repository.workspace = true
 readme = "../README.md"
+keywords = ["sauna", "klafs", "iot", "smart-home", "api"]
+categories = ["api-bindings", "hardware-support"]
 
 [dependencies]
 tokio.workspace = true
