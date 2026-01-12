@@ -25,6 +25,33 @@ This project provides:
 - **klafs-api** - A Rust library for interacting with the Klafs sauna API
 - **sauna** - A command-line tool for controlling your sauna
 
+## Quick Start
+
+```bash
+# Login to your Klafs account
+sauna login -u your@email.com
+
+# Find your sauna ID and set it as default
+sauna saunas
+sauna config --sauna-id "your-sauna-uuid" --pin "1234"
+
+# Check status
+sauna status
+
+# Start your sauna
+sauna power-on
+
+# Or schedule it for later
+sauna power-on --at 18:30
+
+# Adjust settings
+sauna set-temp 85
+sauna set-mode sanarium
+
+# Turn off
+sauna power-off
+```
+
 ## Installation
 
 ### From Source
