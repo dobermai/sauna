@@ -64,6 +64,10 @@ enum Commands {
         #[arg(long)]
         pin: Option<String>,
 
+        /// Set auto-select sauna behavior (true/false)
+        #[arg(long, value_name = "BOOL")]
+        auto_select: Option<bool>,
+
         /// Show current configuration
         #[arg(long)]
         show: bool,
@@ -250,8 +254,9 @@ async fn main() -> Result<()> {
         Commands::Config {
             sauna_id,
             pin,
+            auto_select,
             show,
-        } => cmd_config(sauna_id, pin, show).await,
+        } => cmd_config(sauna_id, pin, auto_select, show).await,
         Commands::Status { sauna_id, json } => {
             cmd_status(sauna_id, json, cli.debug, &cli.debug_file).await
         }
@@ -439,13 +444,18 @@ fn print_saunas(saunas: &[SaunaInfo], config: &Config) {
     );
 }
 
-async fn cmd_config(sauna_id: Option<String>, pin: Option<String>, show: bool) -> Result<()> {
+async fn cmd_config(
+    sauna_id: Option<String>,
+    pin: Option<String>,
+    auto_select: Option<bool>,
+    show: bool,
+) -> Result<()> {
     let mut config = Config::load()?;
 
     if show {
         println!("{}", "Current configuration:".bold());
         println!(
-            "  Username:  {}",
+            "  Username:    {}",
             config
                 .username
                 .as_deref()
@@ -453,7 +463,7 @@ async fn cmd_config(sauna_id: Option<String>, pin: Option<String>, show: bool) -
                 .cyan()
         );
         println!(
-            "  Sauna ID:  {}",
+            "  Sauna ID:    {}",
             config
                 .sauna_id
                 .as_deref()
@@ -461,14 +471,22 @@ async fn cmd_config(sauna_id: Option<String>, pin: Option<String>, show: bool) -
                 .cyan()
         );
         println!(
-            "  Config:    {}",
+            "  Auto-select: {}",
+            if config.auto_select_sauna {
+                "enabled".green()
+            } else {
+                "disabled".dimmed()
+            }
+        );
+        println!(
+            "  Config:      {}",
             Config::config_path()?.display().to_string().dimmed()
         );
 
         if let Some(ref sid) = config.sauna_id {
             let has_pin = Config::get_pin(sid)?.is_some();
             println!(
-                "  PIN:       {}",
+                "  PIN:         {}",
                 if has_pin {
                     "(stored)".green()
                 } else {
@@ -498,6 +516,16 @@ async fn cmd_config(sauna_id: Option<String>, pin: Option<String>, show: bool) -
         changed = true;
     }
 
+    if let Some(enabled) = auto_select {
+        config.auto_select_sauna = enabled;
+        if enabled {
+            println!("Auto-select sauna {}", "enabled".green());
+        } else {
+            println!("Auto-select sauna {}", "disabled".yellow());
+        }
+        changed = true;
+    }
+
     if changed {
         config.save()?;
     } else {
@@ -519,9 +547,7 @@ async fn cmd_status(
     let config = Config::load()?;
     let client = create_authenticated_client(&config, debug, debug_file).await?;
 
-    let sauna_id = sauna_id
-        .or(config.sauna_id)
-        .context("No sauna ID provided. Use --sauna-id or set a default with 'sauna config --sauna-id <ID>'")?;
+    let sauna_id = resolve_sauna_id(sauna_id, &config, &client).await?;
 
     let status = client.get_status(&sauna_id).await?;
 
@@ -633,9 +659,7 @@ async fn cmd_power_on(
     let config = Config::load()?;
     let client = create_authenticated_client(&config, debug, debug_file).await?;
 
-    let sauna_id = sauna_id.or(config.sauna_id).context(
-        "No sauna ID provided. Use --sauna-id or set a default with 'sauna config --sauna-id <ID>'",
-    )?;
+    let sauna_id = resolve_sauna_id(sauna_id, &config, &client).await?;
 
     let pin = match pin {
         Some(p) => p,
@@ -697,9 +721,7 @@ async fn cmd_power_off(
     let config = Config::load()?;
     let client = create_authenticated_client(&config, debug, debug_file).await?;
 
-    let sauna_id = sauna_id.or(config.sauna_id).context(
-        "No sauna ID provided. Use --sauna-id or set a default with 'sauna config --sauna-id <ID>'",
-    )?;
+    let sauna_id = resolve_sauna_id(sauna_id, &config, &client).await?;
 
     println!("{}", "Powering off sauna...".dimmed());
 
@@ -719,9 +741,7 @@ async fn cmd_set_temp(
     let config = Config::load()?;
     let client = create_authenticated_client(&config, debug, debug_file).await?;
 
-    let sauna_id = sauna_id.or(config.sauna_id).context(
-        "No sauna ID provided. Use --sauna-id or set a default with 'sauna config --sauna-id <ID>'",
-    )?;
+    let sauna_id = resolve_sauna_id(sauna_id, &config, &client).await?;
 
     println!("{}", format!("Setting temperature to {}°C...", temperature).dimmed());
 
@@ -745,9 +765,7 @@ async fn cmd_set_mode(
     let config = Config::load()?;
     let client = create_authenticated_client(&config, debug, debug_file).await?;
 
-    let sauna_id = sauna_id.or(config.sauna_id).context(
-        "No sauna ID provided. Use --sauna-id or set a default with 'sauna config --sauna-id <ID>'",
-    )?;
+    let sauna_id = resolve_sauna_id(sauna_id, &config, &client).await?;
 
     let sauna_mode = match mode.to_lowercase().as_str() {
         "sauna" => SaunaMode::Sauna,
@@ -778,9 +796,7 @@ async fn cmd_set_humidity(
     let config = Config::load()?;
     let client = create_authenticated_client(&config, debug, debug_file).await?;
 
-    let sauna_id = sauna_id.or(config.sauna_id).context(
-        "No sauna ID provided. Use --sauna-id or set a default with 'sauna config --sauna-id <ID>'",
-    )?;
+    let sauna_id = resolve_sauna_id(sauna_id, &config, &client).await?;
 
     println!("{}", format!("Setting humidity level to {}...", level).dimmed());
 
@@ -805,9 +821,7 @@ async fn cmd_schedule(
     let config = Config::load()?;
     let client = create_authenticated_client(&config, debug, debug_file).await?;
 
-    let sauna_id = sauna_id.or(config.sauna_id).context(
-        "No sauna ID provided. Use --sauna-id or set a default with 'sauna config --sauna-id <ID>'",
-    )?;
+    let sauna_id = resolve_sauna_id(sauna_id, &config, &client).await?;
 
     // Determine if we're setting or clearing the schedule
     let schedule_time = if clear {
@@ -874,9 +888,7 @@ async fn cmd_configure(
     let config = Config::load()?;
     let client = create_authenticated_client(&config, debug, debug_file).await?;
 
-    let sauna_id = sauna_id.or(config.sauna_id).context(
-        "No sauna ID provided. Use --sauna-id or set a default with 'sauna config --sauna-id <ID>'",
-    )?;
+    let sauna_id = resolve_sauna_id(sauna_id, &config, &client).await?;
 
     // Parse time if provided
     let (hour, minute) = match time {
@@ -1020,11 +1032,8 @@ async fn cmd_profile(command: ProfileCommands, debug: bool, debug_file: &Path) -
                 .get(&name)
                 .with_context(|| format!("Profile '{}' not found", name))?;
 
-            let sauna_id = sauna_id.or(config.sauna_id.clone()).context(
-                "No sauna ID provided. Use --sauna-id or set a default with 'sauna config --sauna-id <ID>'",
-            )?;
-
             let client = create_authenticated_client(&config, debug, debug_file).await?;
+            let sauna_id = resolve_sauna_id(sauna_id, &config, &client).await?;
 
             // First set the mode
             let sauna_mode = match profile.mode.as_str() {
@@ -1117,4 +1126,46 @@ async fn create_authenticated_client(
     }
 
     Ok(client)
+}
+
+/// Resolve the sauna ID from command-line argument, config, or auto-select
+async fn resolve_sauna_id(
+    provided_id: Option<String>,
+    config: &Config,
+    client: &KlafsClient,
+) -> Result<String> {
+    // First priority: command-line argument
+    if let Some(id) = provided_id {
+        return Ok(id);
+    }
+
+    // Second priority: configured default
+    if let Some(id) = config.sauna_id.clone() {
+        return Ok(id);
+    }
+
+    // Third priority: auto-select if enabled and only one sauna exists
+    if config.auto_select_sauna {
+        let saunas = client.list_saunas().await?;
+
+        if saunas.len() == 1 {
+            let sauna = &saunas[0];
+            eprintln!(
+                "{} Auto-selected sauna: {}",
+                "Note:".cyan(),
+                sauna.name.cyan().bold()
+            );
+            return Ok(sauna.id.clone());
+        } else if saunas.is_empty() {
+            bail!("No saunas found on this account. Make sure your sauna is registered in the Klafs app.");
+        } else {
+            bail!(
+                "Multiple saunas found ({}). Use --sauna-id or set a default with 'sauna config --sauna-id <ID>'.\nRun 'sauna saunas' to list them.",
+                saunas.len()
+            );
+        }
+    }
+
+    // No sauna ID available
+    bail!("No sauna ID provided. Use --sauna-id or set a default with 'sauna config --sauna-id <ID>'");
 }

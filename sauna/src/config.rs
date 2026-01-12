@@ -7,13 +7,31 @@ const APP_NAME: &str = "klafs";
 const KEYRING_SERVICE: &str = "klafs-cli";
 
 /// Configuration stored in the config file
-#[derive(Debug, Default, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Config {
     /// Email/username for the Klafs account
     pub username: Option<String>,
 
     /// Default sauna ID to use
     pub sauna_id: Option<String>,
+
+    /// Auto-select sauna if only one is registered (default: true)
+    #[serde(default = "default_true")]
+    pub auto_select_sauna: bool,
+}
+
+fn default_true() -> bool {
+    true
+}
+
+impl Default for Config {
+    fn default() -> Self {
+        Self {
+            username: None,
+            sauna_id: None,
+            auto_select_sauna: true,
+        }
+    }
 }
 
 impl Config {
