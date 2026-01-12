@@ -1,0 +1,31 @@
+[package]
+name = "klafs-cli"
+description = "CLI tool for controlling Klafs saunas"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "klafs"
+path = "src/main.rs"
+
+[dependencies]
+klafs-core.workspace = true
+tokio.workspace = true
+clap.workspace = true
+anyhow.workspace = true
+colored.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+
+# Config file handling
+directories = "5"
+toml = "0.8"
+
+# Secure credential storage
+keyring.workspace = true
+
+# Password input
+rpassword = "7"

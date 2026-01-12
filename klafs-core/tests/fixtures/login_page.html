@@ -1,0 +1,14 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Klafs Sauna Login</title>
+</head>
+<body>
+    <form action="/Account/Login" method="post">
+        <input name="__RequestVerificationToken" type="hidden" value="test-csrf-token-12345" />
+        <input type="text" name="UserName" />
+        <input type="password" name="Password" />
+        <button type="submit">Login</button>
+    </form>
+</body>
+</html>

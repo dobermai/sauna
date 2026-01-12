@@ -1,0 +1,48 @@
+[workspace]
+resolver = "2"
+members = ["klafs-core", "klafs-cli"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+authors = ["Your Name <your.email@example.com>"]
+license = "MIT"
+repository = "https://github.com/yourusername/klafs"
+
+[workspace.dependencies]
+# Async runtime
+tokio = { version = "1", features = ["full"] }
+
+# HTTP client
+reqwest = { version = "0.12", features = ["json", "cookies"] }
+
+# Serialization
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# Error handling
+thiserror = "2"
+anyhow = "1"
+
+# CLI
+clap = { version = "4", features = ["derive"] }
+
+# Credentials storage
+keyring = "3"
+
+# Output formatting
+colored = "2"
+
+# Logging and tracing
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+tracing-appender = "0.2"
+
+# Time handling
+chrono = { version = "0.4", features = ["serde"] }
+
+# Testing
+wiremock = "0.6"
+
+# Local crates
+klafs-core = { path = "klafs-core" }
