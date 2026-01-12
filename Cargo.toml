@@ -5,9 +5,9 @@ members = ["klafs-api", "sauna"]
 [workspace.package]
 version = "0.1.0"
 edition = "2021"
-authors = ["Your Name <your.email@example.com>"]
-license = "MIT"
-repository = "https://github.com/yourusername/klafs"
+authors = ["Dominik Obermaier <dobermai@users.noreply.github.com>"]
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/dobermai/sauna"
 
 [workspace.dependencies]
 # Async runtime

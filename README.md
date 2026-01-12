@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <a href="#license"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License: MIT"></a>
+  <a href="#license"><img src="https://img.shields.io/badge/license-MIT%2FApache--2.0-blue.svg" alt="License: MIT/Apache-2.0"></a>
   <a href="https://www.rust-lang.org/"><img src="https://img.shields.io/badge/rust-1.70%2B-orange.svg" alt="Rust: 1.70+"></a>
   <a href="#"><img src="https://img.shields.io/badge/platform-macOS%20%7C%20Linux%20%7C%20Windows-lightgrey.svg" alt="Platform"></a>
 </p>
@@ -30,8 +30,8 @@ This project provides:
 ### From Source
 
 ```bash
-git clone https://github.com/yourusername/klafs.git
-cd klafs
+git clone https://github.com/dobermai/sauna.git
+cd sauna
 cargo install --path sauna
 ```
 
@@ -291,9 +291,9 @@ Base URL: `https://sauna-app-19.klafs.com`
 ## Project Structure
 
 ```
-klafs/
+sauna/
 ├── Cargo.toml              # Workspace manifest
-├── klafs-api/             # Core library
+├── klafs-api/              # API client library
 │   ├── src/
 │   │   ├── lib.rs          # Public API
 │   │   ├── client.rs       # HTTP client
@@ -361,4 +361,9 @@ This software is intended for personal, non-commercial use by owners of Klafs sa
 
 ## License
 
-MIT
+Licensed under either of:
+
+- Apache License, Version 2.0 ([LICENSE-APACHE](LICENSE-APACHE) or http://www.apache.org/licenses/LICENSE-2.0)
+- MIT License ([LICENSE-MIT](LICENSE-MIT) or http://opensource.org/licenses/MIT)
+
+at your option.
