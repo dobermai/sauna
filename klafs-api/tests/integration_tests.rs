@@ -300,8 +300,9 @@ mod power_control_tests {
             .mount(&mock_server)
             .await;
 
+        // Use a valid 4-digit PIN format - server will reject it as wrong
         let result = client
-            .power_on("364cc9db-86f1-49d1-86cd-f6ef9b20a490", "wrong", None)
+            .power_on("364cc9db-86f1-49d1-86cd-f6ef9b20a490", "0000", None)
             .await;
 
         assert!(matches!(result, Err(KlafsError::InvalidPin)));
@@ -672,6 +673,66 @@ mod control_tests {
                 None,
             )
             .await;
+        assert!(matches!(result, Err(KlafsError::InvalidParameter { .. })));
+    }
+}
+
+mod validation_tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn test_invalid_pin_format_too_short() {
+        let client = KlafsClient::new();
+        let result = client
+            .power_on("364cc9db-86f1-49d1-86cd-f6ef9b20a490", "123", None)
+            .await;
+        assert!(matches!(result, Err(KlafsError::InvalidParameter { .. })));
+        if let Err(KlafsError::InvalidParameter { message }) = result {
+            assert!(message.contains("4 digits"));
+        }
+    }
+
+    #[tokio::test]
+    async fn test_invalid_pin_format_too_long() {
+        let client = KlafsClient::new();
+        let result = client
+            .power_on("364cc9db-86f1-49d1-86cd-f6ef9b20a490", "12345", None)
+            .await;
+        assert!(matches!(result, Err(KlafsError::InvalidParameter { .. })));
+    }
+
+    #[tokio::test]
+    async fn test_invalid_pin_format_non_numeric() {
+        let client = KlafsClient::new();
+        let result = client
+            .power_on("364cc9db-86f1-49d1-86cd-f6ef9b20a490", "abcd", None)
+            .await;
+        assert!(matches!(result, Err(KlafsError::InvalidParameter { .. })));
+    }
+
+    #[tokio::test]
+    async fn test_invalid_sauna_id_format() {
+        let client = KlafsClient::new();
+
+        // Test with garbage string
+        let result = client.get_status("not-a-uuid").await;
+        assert!(matches!(result, Err(KlafsError::InvalidParameter { .. })));
+        if let Err(KlafsError::InvalidParameter { message }) = result {
+            assert!(message.contains("Invalid sauna ID format"));
+        }
+    }
+
+    #[tokio::test]
+    async fn test_invalid_sauna_id_empty() {
+        let client = KlafsClient::new();
+        let result = client.get_status("").await;
+        assert!(matches!(result, Err(KlafsError::InvalidParameter { .. })));
+    }
+
+    #[tokio::test]
+    async fn test_invalid_sauna_id_partial_uuid() {
+        let client = KlafsClient::new();
+        let result = client.get_status("364cc9db-86f1-49d1").await;
         assert!(matches!(result, Err(KlafsError::InvalidParameter { .. })));
     }
 }

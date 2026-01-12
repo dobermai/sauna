@@ -270,6 +270,7 @@ impl KlafsClient {
     /// Get the current status of a sauna
     #[instrument(skip(self), fields(sauna_id = %sauna_id))]
     pub async fn get_status(&self, sauna_id: &str) -> Result<SaunaStatus> {
+        Self::validate_sauna_id(sauna_id)?;
         debug!("Getting status for sauna {}", sauna_id);
         let timer = Timer::start();
 
@@ -372,6 +373,16 @@ impl KlafsClient {
         pin: &str,
         schedule: Option<(i32, i32)>,
     ) -> Result<()> {
+        // Validate sauna ID format
+        Self::validate_sauna_id(sauna_id)?;
+
+        // Validate PIN format (must be exactly 4 digits)
+        if pin.len() != 4 || !pin.chars().all(|c| c.is_ascii_digit()) {
+            return Err(KlafsError::InvalidParameter {
+                message: "PIN must be exactly 4 digits".to_string(),
+            });
+        }
+
         let (time_selected, sel_hour, sel_min) = match schedule {
             Some((hour, minute)) => {
                 // Validate schedule time
@@ -458,6 +469,7 @@ impl KlafsClient {
     /// * `sauna_id` - UUID of the sauna
     #[instrument(skip(self), fields(sauna_id = %sauna_id))]
     pub async fn power_off(&self, sauna_id: &str) -> Result<()> {
+        Self::validate_sauna_id(sauna_id)?;
         info!("Powering off sauna {}", sauna_id);
         let timer = Timer::start();
 
@@ -509,6 +521,7 @@ impl KlafsClient {
     /// * `mode` - The mode to set (Sauna, Sanarium, or Infrared)
     #[instrument(skip(self), fields(sauna_id = %sauna_id, mode = ?mode))]
     pub async fn set_mode(&self, sauna_id: &str, mode: SaunaMode) -> Result<()> {
+        Self::validate_sauna_id(sauna_id)?;
         info!("Setting mode to {:?} for sauna {}", mode, sauna_id);
         let timer = Timer::start();
 
@@ -551,6 +564,8 @@ impl KlafsClient {
     ///   - Sanarium mode: 40-75°C
     #[instrument(skip(self), fields(sauna_id = %sauna_id, temperature = %temperature))]
     pub async fn set_temperature(&self, sauna_id: &str, temperature: i32) -> Result<()> {
+        Self::validate_sauna_id(sauna_id)?;
+
         // Validate temperature range
         if !(10..=100).contains(&temperature) {
             return Err(KlafsError::InvalidParameter {
@@ -604,6 +619,8 @@ impl KlafsClient {
     /// * `level` - Humidity level (1-10)
     #[instrument(skip(self), fields(sauna_id = %sauna_id, level = %level))]
     pub async fn set_humidity(&self, sauna_id: &str, level: i32) -> Result<()> {
+        Self::validate_sauna_id(sauna_id)?;
+
         // Validate humidity level
         if !(1..=10).contains(&level) {
             return Err(KlafsError::InvalidParameter {
@@ -655,6 +672,8 @@ impl KlafsClient {
     /// * `minute` - Start minute (0-59)
     #[instrument(skip(self), fields(sauna_id = %sauna_id, hour = %hour, minute = %minute))]
     pub async fn set_start_time(&self, sauna_id: &str, hour: i32, minute: i32) -> Result<()> {
+        Self::validate_sauna_id(sauna_id)?;
+
         // Validate time
         if !(0..=23).contains(&hour) {
             return Err(KlafsError::InvalidParameter {
@@ -721,6 +740,8 @@ impl KlafsClient {
         sauna_id: &str,
         time: Option<(i32, i32)>,
     ) -> Result<()> {
+        Self::validate_sauna_id(sauna_id)?;
+
         let (time_set, hours, minutes) = match time {
             Some((hour, minute)) => {
                 // Validate time
@@ -800,6 +821,8 @@ impl KlafsClient {
         humidity_level: i32,
         ir_level: i32,
     ) -> Result<()> {
+        Self::validate_sauna_id(sauna_id)?;
+
         // Validate parameters
         if !(10..=100).contains(&temperature) {
             return Err(KlafsError::InvalidParameter {
@@ -883,6 +906,8 @@ impl KlafsClient {
         hour: Option<i32>,
         minute: Option<i32>,
     ) -> Result<()> {
+        Self::validate_sauna_id(sauna_id)?;
+
         // Validate parameters if provided
         if let Some(temp) = sauna_temperature {
             if !(10..=100).contains(&temp) {
@@ -1118,6 +1143,19 @@ impl KlafsClient {
 
     fn is_guid(s: &str) -> bool {
         uuid::Uuid::parse_str(s.trim()).is_ok()
+    }
+
+    /// Validate that a sauna ID is a valid UUID format
+    fn validate_sauna_id(sauna_id: &str) -> Result<()> {
+        if !Self::is_guid(sauna_id) {
+            return Err(KlafsError::InvalidParameter {
+                message: format!(
+                    "Invalid sauna ID format '{}'. Expected a UUID (e.g., 364cc9db-86f1-49d1-86cd-f6ef9b20a490)",
+                    sauna_id
+                ),
+            });
+        }
+        Ok(())
     }
 
     fn extract_guid(text: &str) -> Option<String> {
